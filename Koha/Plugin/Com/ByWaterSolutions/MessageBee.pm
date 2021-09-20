@@ -211,8 +211,17 @@ sub before_send_messages {
             $data->{biblioitem} = $item->biblioitem->unblessed;
         }
 
-        $data->{library} = Koha::Libraries->find( $yaml->{library} )
+        ## Handle misc key/value pairs
+        $data->{library} //= Koha::Libraries->find( $yaml->{library} )
           if $yaml->{library};
+        $data->{patron} //= Koha::Patrons->find( $yaml->{patron} )
+          if $yaml->{patron};
+        $data->{item} //= Koha::Items->find( $yaml->{item} )
+          if $yaml->{item};
+        $data->{biblio} //= Koha::Biblios->find( $yaml->{biblio} )
+          if $yaml->{biblio};
+        $data->{biblioitem} //= Koha::Biblioitems->find( $yaml->{biblioitem} )
+          if $yaml->{biblioitem};
 
         push( @message_data, $data );
     }

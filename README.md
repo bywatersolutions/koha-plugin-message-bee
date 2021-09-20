@@ -17,10 +17,12 @@ the message content must be a YAML blob of key/value pairs. The only one that is
 is `messagebee: yes` which tells the plugin this message is destined for MessageBee.
 
 Other keys you may use are:
-* `biblio` - biblio.biblionumber, adds both biblio and biblioitem data
-* `item` - items.itemnumber, adds item, biblio and biblioitem data
-* `branch` - branches.branchcode
-* `issue` - Id for either issues or old_issues
+* `biblio` - biblio.biblionumber
+* `biblioitem` - biblioitems.biblioitemnumber
+* `item` - items.itemnumber
+* `library` - branches.branchcode
+* `patron` - borrowers.borrowernumber
+* `checkout` - issues.issue_id, auto-imports patron, library, item, biblio and biblioitem
 
 Example notices:
 
