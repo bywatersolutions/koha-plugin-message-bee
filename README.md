@@ -17,6 +17,80 @@ the message content must be a YAML blob of key/value pairs. The only one that is
 is `messagebee: yes` which tells the plugin this message is destined for MessageBee.
 
 Other keys you may use are:
-* `message` - message_queue.message_id - Sends the message queue data, this should always be transmitted as well
-* `biblio` - biblio.biblionumber
-* `item` - items.itemnumber
+* `biblio` - biblio.biblionumber, adds both biblio and biblioitem data
+* `item` - items.itemnumber, adds item, biblio and biblioitem data
+* `branch` - branches.branchcode
+* `issue` - Id for either issues or old_issues
+
+Example notices:
+
+CHECKOUT:
+```
+----
+---
+messagebee: yes
+checkout: [% checkout.id %]
+branch: [% branch.id %]
+----
+```
+
+CHECKIN:
+```
+----
+---
+messagebee: yes
+old_checkout: [% old_checkout %]
+branch: [% branch.id %]
+----
+```
+
+HOLD:
+```
+---
+messagebee: yes
+hold: [% hold.id %]
+```
+
+PREDUE:
+
+_advance_notices.pl *must* be run with the option `--itemscontent issue_id`_
+```
+---
+messagebee: yes
+checkout: <<items.content>>
+```
+
+PREDUEDGST:
+
+_advance_notices.pl *must* be run with the option `--itemscontent issue_id`_
+```
+---
+messagebee: yes
+checkouts: <<items.content>>
+```
+
+DUE:
+
+_advance_notices.pl *must* be run with the option `--itemscontent issue_id`_
+```
+---
+messagebee: yes
+checkout: <<items.content>>
+```
+
+DUEDGST:
+
+_advance_notices.pl *must* be run with the option `--itemscontent issue_id`_
+```
+---
+messagebee: yes
+checkouts: <<items.content>>
+```
+
+OVERDUE NOTICES:
+```
+---
+messagebee: yes
+checkouts: [% FOREACH o IN overdues %][% o.id %],[% END %]
+[% END %]
+```
