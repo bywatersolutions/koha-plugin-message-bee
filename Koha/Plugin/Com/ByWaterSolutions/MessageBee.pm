@@ -10,21 +10,25 @@ use base qw(Koha::Plugins::Base);
 use C4::Auth;
 use C4::Context;
 
-use Cwd qw(abs_path);
+use Text::Tabs;
+use Try::Tiny;
+use YAML::XS qw(Load);
+use Mojo::JSON qw(encode_json);
 
 ## Here we set our plugin version
-our $VERSION = "{VERSION}";
+our $VERSION         = "{VERSION}";
 our $MINIMUM_VERSION = "{MINIMUM_VERSION}";
 
 our $metadata = {
     name            => 'MessageBee',
     author          => 'Kyle M Hall',
-    date_authored   => '2021-06-30',
+    date_authored   => '2021-09-20',
     date_updated    => "1900-01-01",
     minimum_version => $MINIMUM_VERSION,
     maximum_version => undef,
     version         => $VERSION,
-    description     => 'Plugin to forward messages to MessageBee for processing and sending',
+    description =>
+      'Plugin to forward messages to MessageBee for processing and sending',
 };
 
 =head3 new
@@ -55,12 +59,7 @@ sub configure {
     my $cgi = $self->{'cgi'};
 
     unless ( $cgi->param('save') ) {
-        my $template = $self->get_template({ file => 'configure.tt' });
-
-        ## Grab the values we already have for our settings, if any exist
-        $template->param(
-            footers => C4::Context->config("email_footers"),
-        );
+        my $template = $self->get_template( { file => 'configure.tt' } );
 
         $self->output_html( $template->output() );
     }
@@ -127,40 +126,98 @@ in process_message_queue.pl
 sub before_send_messages {
     my ( $self, $params ) = @_;
 
-    my $email_footers = C4::Context->config("email_footers");
-    my $footers;
-    foreach my $f ( @{$email_footers->{footer}} ) {
-        my $lang = $f->{lang} || 'default';
-        my $type = $f->{type} || 'text';
-        my $content = $f->{content};
-        $footers->{$lang}->{$type} = $content;
-	}
-
     my $messages = Koha::Notice::Messages->search(
         {
-            status                 => 'pending',
-            message_transport_type => 'email',
+            status => 'pending',
         }
     );
 
-    my $TranslateNotices = C4::Context->preference('TranslateNotices');
+    my @message_data;
+    while ( my $m = $messages->next ) {
+        $m->status('sent')->update();
 
-	while ( my $m = $messages->next ) {
-		my $lang = 'default';
-        if ( $TranslateNotices ) {
-			my $patron = Koha::Patrons->find( $m->borrowernumber );
-            $lang = $patron->lang;
+        my $content = $m->content();
+
+        my $yaml;
+        try {
+            $yaml = Load $content;
+        }
+        catch {
+            $yaml = undef;
+        };
+
+        next unless $yaml;
+        next unless ref $yaml eq 'HASH';
+        next unless $yaml->{messagebee};
+        next unless $yaml->{messagebee} eq 'yes';
+
+        my $data;
+        $data->{message} = $m->unblessed;
+
+        ## Handle 'checkout' / 'old_checkout'
+        my $checkout;
+        if ( $yaml->{checkout} ) {
+            $checkout = Koha::Checkouts->find( $yaml->{checkout} );
+        }
+        if ( $yaml->{old_checkout} ) {
+            $checkout = Koha::Old::Checkouts->find( $yaml->{old_checkout} );
+        }
+        if ($checkout) {
+            $data->{checkout} = $checkout->unblessed;
+            $data->{patron}   = $checkout->patron->unblessed;
+            $data->{library}  = $checkout->library->unblessed;
+
+            my $item = $checkout->item;
+            $data->{item}       = $item->unblessed;
+            $data->{biblio}     = $item->biblio->unblessed;
+            $data->{biblioitem} = $item->biblioitem->unblessed;
         }
 
-        my $footers_for_lang = $footers->{$lang} || $footers->{default};
+        ## Handle 'checkouts'
+        if ( $yaml->{checkouts} ) {
+            my @checkouts = split( /,/, $yaml->{checkouts} );
 
-        my $content_type = $m->content_type // q{};
-        my $type = $content_type =~ m|^text/html| ? 'html' : 'text';
+            foreach my $id (@checkouts) {
+                my $checkout = Koha::Checkouts->find($id);
+                next unless $checkout;
 
-        my $footer = $footers_for_lang->{$type} || $footers_for_lang->{text} || q{};
+                $data->{patron} //= $checkout->patron->unblessed;
 
-        $m->content( $m->content . $footer )->update();
-	}
+                my $subdata;
+                my $item = $checkout->item;
+                $subdata->{checkout}   = $checkout->unblessed;
+                $subdata->{library}    = $checkout->library->unblessed;
+                $subdata->{item}       = $item->unblessed;
+                $subdata->{biblio}     = $item->biblio->unblessed;
+                $subdata->{biblioitem} = $item->biblioitem->unblessed;
+
+                $data->{checkouts} //= [];
+                push( @{ $data->{checkouts} }, $subdata );
+            }
+        }
+
+        ## Handle 'hold'
+        if ( $yaml->{hold} ) {
+            my $hold = Koha::Holds->find( $yaml->{hold} );
+            next unless $hold;
+
+            $data->{hold}           = $hold->unblessed;
+            $data->{patron}         = $hold->patron->unblessed;
+            $data->{pickup_library} = $hold->branch->unblessed;
+
+            my $item = $hold->item;
+            $data->{item}       = $item->unblessed;
+            $data->{biblio}     = $item->biblio->unblessed;
+            $data->{biblioitem} = $item->biblioitem->unblessed;
+        }
+
+        $data->{library} = Koha::Libraries->find( $yaml->{library} )
+          if $yaml->{library};
+
+        push( @message_data, $data );
+    }
+
+    say encode_json( { messages => \@message_data } );
 }
 
 1;

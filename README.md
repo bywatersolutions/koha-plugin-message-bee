@@ -30,7 +30,7 @@ CHECKOUT:
 ---
 messagebee: yes
 checkout: [% checkout.id %]
-branch: [% branch.id %]
+library: [% branch.id %]
 ----
 ```
 
@@ -40,7 +40,7 @@ CHECKIN:
 ---
 messagebee: yes
 old_checkout: [% old_checkout %]
-branch: [% branch.id %]
+library: [% branch.id %]
 ----
 ```
 
@@ -66,7 +66,7 @@ _advance_notices.pl *must* be run with the option `--itemscontent issue_id`_
 ```
 ---
 messagebee: yes
-checkouts: <<items.content>>
+checkouts: [% FILTER replace('\n', ',') %]<<items.content>>[% END %]
 ```
 
 DUE:
@@ -84,7 +84,7 @@ _advance_notices.pl *must* be run with the option `--itemscontent issue_id`_
 ```
 ---
 messagebee: yes
-checkouts: <<items.content>>
+checkouts: [% FILTER replace('\n', ',') %]<<items.content>>[% END %]
 ```
 
 OVERDUE NOTICES:
