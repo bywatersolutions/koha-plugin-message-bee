@@ -1,0 +1,19 @@
+{
+  "name": "koha-plugin-message-bee",
+  "version": "0.0.1",
+  "previous_version": "0.0.0",
+  "description": "Koha MessagBee Plugin",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bywatersolutions/koha-plugin-message-bee.git"
+  },
+  "author": "Kyle M Hall <kyle@bywatersolutions.com>",
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/bywatersolutions/koha-plugin-message-bee/issues"
+  },
+  "homepage": "https://github.com/bywatersolutions/koha-plugin-message-bee#readme"
+}
