@@ -94,5 +94,4 @@ OVERDUE NOTICES:
 ---
 messagebee: yes
 checkouts: [% FOREACH o IN overdues %][% o.id %],[% END %]
-[% END %]
 ```

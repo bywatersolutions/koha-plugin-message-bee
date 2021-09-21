@@ -10,10 +10,13 @@ use base qw(Koha::Plugins::Base);
 use C4::Auth;
 use C4::Context;
 
-use Text::Tabs;
+use File::Slurp qw(write_file);
+use File::Temp qw(tempdir);
+use Mojo::JSON qw(encode_json);
+use Net::SFTP::Foreign;
+use POSIX;
 use Try::Tiny;
 use YAML::XS qw(Load);
-use Mojo::JSON qw(encode_json);
 
 ## Here we set our plugin version
 our $VERSION         = "{VERSION}";
@@ -61,13 +64,21 @@ sub configure {
     unless ( $cgi->param('save') ) {
         my $template = $self->get_template( { file => 'configure.tt' } );
 
+        ## Grab the values we already have for our settings, if any exist
+        $template->param(
+            host     => $self->retrieve_data('host'),
+            username => $self->retrieve_data('username'),
+            password => $self->retrieve_data('password'),
+        );
+
         $self->output_html( $template->output() );
     }
     else {
         $self->store_data(
             {
-                foo => $cgi->param('foo'),
-                bar => $cgi->param('bar'),
+                host     => $cgi->param('host'),
+                username => $cgi->param('username'),
+                password => $cgi->param('password'),
             }
         );
         $self->go_home();
@@ -226,7 +237,32 @@ sub before_send_messages {
         push( @message_data, $data );
     }
 
-    say encode_json( { messages => \@message_data } );
+    if (@message_data) {
+        my $json = encode_json( { messages => \@message_data } );
+
+        my $dir = tempdir( CLEANUP => 0 );
+        my $ts       = strftime( "%Y-%m-%dT%H-%M-%S", gmtime( time() ) );
+        my $filename = "$ts.json";
+        my $realpath = "$dir/$filename";
+        write_file( $realpath, $json );
+        say "FILE WRITTEN TO $realpath";
+
+        my $host      = $self->retrieve_data('host');
+        my $username  = $self->retrieve_data('username');
+        my $password  = $self->retrieve_data('password');
+        my $directory = 'cust2unique';
+
+        my $sftp = Net::SFTP::Foreign->new(
+            host     => $host,
+            user     => $username,
+            port     => 22,
+            password => $password
+        );
+        $sftp->die_on_error("Unable to establish SFTP connection");
+        $sftp->setcwd($directory)
+          or die "unable to change cwd: " . $sftp->error;
+        $sftp->put( $realpath, $filename ) or die "put failed: " . $sftp->error;
+    }
 }
 
 1;
