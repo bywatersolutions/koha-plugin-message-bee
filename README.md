@@ -2,6 +2,8 @@
 
 This plugin enables Koha to forward message data to Unqiue's MessageBee service for processing and sending.
 
+NOTE: This plugin requires the patches for Koha community bug 29100
+
 # Downloading
 
 From the [release page](https://github.com/bywatersolutions/koha-plugin-email-footer/releases) you can download the latest release in `kpz` format.
@@ -54,26 +56,20 @@ hold: [% hold.id %]
 ```
 
 PREDUE:
-
-_advance_notices.pl *must* be run with the option `--itemscontent issue_id`_
 ```
 ---
 messagebee: yes
-checkout: <<items.content>>
+checkout: [% issue.issue_id %]
 ```
 
 PREDUEDGST:
-
-_advance_notices.pl *must* be run with the option `--itemscontent issue_id`_
 ```
 ---
 messagebee: yes
-checkouts: [% FILTER replace('\n', ',') %]<<items.content>>[% END %]
+checkouts: [% FOREACH i IN issues %][% i.issue_id %],[% END %]
 ```
 
 DUE:
-
-_advance_notices.pl *must* be run with the option `--itemscontent issue_id`_
 ```
 ---
 messagebee: yes
@@ -81,12 +77,10 @@ checkout: <<items.content>>
 ```
 
 DUEDGST:
-
-_advance_notices.pl *must* be run with the option `--itemscontent issue_id`_
 ```
 ---
 messagebee: yes
-checkouts: [% FILTER replace('\n', ',') %]<<items.content>>[% END %]
+checkouts: [% FOREACH i IN issues %][% i.issue_id %],[% END %]
 ```
 
 OVERDUE NOTICES:
