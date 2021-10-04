@@ -145,8 +145,6 @@ sub before_send_messages {
 
     my @message_data;
     while ( my $m = $messages->next ) {
-        $m->status('sent')->update();
-
         my $content = $m->content();
 
         my $yaml;
@@ -161,6 +159,8 @@ sub before_send_messages {
         next unless ref $yaml eq 'HASH';
         next unless $yaml->{messagebee};
         next unless $yaml->{messagebee} eq 'yes';
+
+        $m->status('sent')->update();
 
         my $data;
         $data->{message} = $m->unblessed;
