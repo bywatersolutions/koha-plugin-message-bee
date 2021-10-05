@@ -73,7 +73,7 @@ DUE:
 ```
 ---
 messagebee: yes
-checkout: <<items.content>>
+checkout: [% issue.issue_id %]
 ```
 
 DUEDGST:
