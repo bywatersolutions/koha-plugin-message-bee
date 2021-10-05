@@ -247,6 +247,8 @@ sub before_send_messages {
         write_file( $realpath, $json );
         say "FILE WRITTEN TO $realpath";
 
+        write_file( $ENV{'MESSAGEBEE_ARCHIVE_PATH'} . "/$filename", $json ) if $ENV{'MESSAGE_BEE_ARCHIVE_PATH'};
+
         my $host      = $self->retrieve_data('host');
         my $username  = $self->retrieve_data('username');
         my $password  = $self->retrieve_data('password');
