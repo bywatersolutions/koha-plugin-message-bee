@@ -44,7 +44,7 @@ CHECKIN:
 ----
 ---
 messagebee: yes
-old_checkout: [% old_checkout %]
+old_checkout: [% old_checkout.issue_id %]
 library: [% branch.id %]
 ----
 ```

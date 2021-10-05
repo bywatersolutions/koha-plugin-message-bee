@@ -234,7 +234,11 @@ sub before_send_messages {
         $data->{biblioitem} //= Koha::Biblioitems->find( $yaml->{biblioitem} )
           if $yaml->{biblioitem};
 
-        push( @message_data, $data );
+        if ( keys %$data ) {
+            push( @message_data, $data );
+        } else {
+            $m->status('failed')->update();
+        }
     }
 
     if (@message_data) {
