@@ -137,6 +137,8 @@ in process_message_queue.pl
 sub before_send_messages {
     my ( $self, $params ) = @_;
 
+    say "MESSAGE BEE TEST MODE" if $ENV{MESSAGEBEE_TEST_MODE};
+
     my $messages = Koha::Notice::Messages->search(
         {
             status => 'pending',
@@ -144,6 +146,7 @@ sub before_send_messages {
     );
 
     my @message_data;
+    my $messages_handled = 0;
     while ( my $m = $messages->next ) {
         my $content = $m->content();
 
@@ -161,6 +164,8 @@ sub before_send_messages {
             next unless ref $yaml eq 'HASH';
             next unless $yaml->{messagebee};
             next unless $yaml->{messagebee} eq 'yes';
+
+            $messages_handled++;
 
             $m->status('sent')->update() unless $ENV{MESSAGEBEE_TEST_MODE};
 
@@ -227,8 +232,8 @@ sub before_send_messages {
             ## Handle misc key/value pairs
             $data->{library} = Koha::Libraries->find( $yaml->{library} )
               if $yaml->{library};
-            $data->{patron} = Koha::Patrons->find( $yaml->{patron} || $m->borrowernumber )
-              if $yaml->{patron} || $m->borrowernumber;
+            $data->{patron} = Koha::Patrons->find( $yaml->{patron} )
+              if $yaml->{patron};
             $data->{item} = Koha::Items->find( $yaml->{item} )
               if $yaml->{item};
             $data->{biblio} = Koha::Biblios->find( $yaml->{biblio} )
@@ -246,6 +251,8 @@ sub before_send_messages {
         }
     }
 
+    say "MESSAGES HANDLED: $messsages_handled";
+
     if (@message_data) {
         my $json = encode_json( { messages => \@message_data } );
 
@@ -254,7 +261,7 @@ sub before_send_messages {
         my $filename = "$ts.json";
         my $realpath = "$dir/$filename";
 
-        if ( $ENV{MESSAGE_BEE_ARCHIVE_PATH} ) {
+        if ( $ENV{MESSAGEBEE_ARCHIVE_PATH} ) {
             my $archive_path = $ENV{MESSAGEBEE_ARCHIVE_PATH} . "/$filename";
             write_file( $archive_path, $json );
             say "FILE WRITTEN TO $archive_path";
