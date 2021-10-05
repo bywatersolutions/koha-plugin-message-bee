@@ -146,7 +146,8 @@ sub before_send_messages {
     );
 
     my @message_data;
-    my $messages_handled = 0;
+    my $messages_seen = {};
+    my $messages_generated = 0;
     while ( my $m = $messages->next ) {
         my $content = $m->content();
 
@@ -165,7 +166,8 @@ sub before_send_messages {
             next unless $yaml->{messagebee};
             next unless $yaml->{messagebee} eq 'yes';
 
-            $messages_handled++;
+            $messages_generated++;
+            $messages_seen->{$m->message_id} = 1;
 
             $m->status('sent')->update() unless $ENV{MESSAGEBEE_TEST_MODE};
 
@@ -251,7 +253,9 @@ sub before_send_messages {
         }
     }
 
-    say "MESSAGES HANDLED: $messages_handled";
+
+    say "MESSAGES HANDLED: " . keys %$messages_seen;
+    say "MESSAGES GENERATED: $messages_generated";
 
     if (@message_data) {
         my $json = encode_json( { messages => \@message_data } );
