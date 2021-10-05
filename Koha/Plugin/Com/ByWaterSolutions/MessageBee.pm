@@ -227,8 +227,8 @@ sub before_send_messages {
             ## Handle misc key/value pairs
             $data->{library} = Koha::Libraries->find( $yaml->{library} )
               if $yaml->{library};
-            $data->{patron} = Koha::Patrons->find( $yaml->{patron} )
-              if $yaml->{patron};
+            $data->{patron} = Koha::Patrons->find( $yaml->{patron} || $m->borrowernumber )
+              if $yaml->{patron} || $m->borrowernumber;
             $data->{item} = Koha::Items->find( $yaml->{item} )
               if $yaml->{item};
             $data->{biblio} = Koha::Biblios->find( $yaml->{biblio} )
