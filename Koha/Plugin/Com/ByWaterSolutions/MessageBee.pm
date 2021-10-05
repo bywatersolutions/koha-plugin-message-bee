@@ -251,7 +251,7 @@ sub before_send_messages {
         }
     }
 
-    say "MESSAGES HANDLED: $messsages_handled";
+    say "MESSAGES HANDLED: $messages_handled";
 
     if (@message_data) {
         my $json = encode_json( { messages => \@message_data } );
