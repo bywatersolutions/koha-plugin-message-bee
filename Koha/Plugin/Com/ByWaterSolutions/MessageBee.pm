@@ -30,7 +30,7 @@ our $metadata = {
     minimum_version => $MINIMUM_VERSION,
     maximum_version => undef,
     version         => $VERSION,
-    description =>
+    description     =>
       'Plugin to forward messages to MessageBee for processing and sending',
 };
 
@@ -147,123 +147,140 @@ sub before_send_messages {
     while ( my $m = $messages->next ) {
         my $content = $m->content();
 
-        my $yaml;
+        my @yaml;
         try {
-            $yaml = Load $content;
+            @yaml = Load $content;
         }
         catch {
-            $yaml = undef;
+            @yaml = undef;
         };
 
-        next unless $yaml;
-        next unless ref $yaml eq 'HASH';
-        next unless $yaml->{messagebee};
-        next unless $yaml->{messagebee} eq 'yes';
+        foreach my $yaml (@yaml) {
 
-        $m->status('sent')->update();
+            next unless $yaml;
+            next unless ref $yaml eq 'HASH';
+            next unless $yaml->{messagebee};
+            next unless $yaml->{messagebee} eq 'yes';
 
-        my $data;
-        $data->{message} = $m->unblessed;
+            $m->status('sent')->update() unless $ENV{MESSAGEBEE_TEST_MODE};
 
-        ## Handle 'checkout' / 'old_checkout'
-        my $checkout;
-        if ( $yaml->{checkout} ) {
-            $checkout = Koha::Checkouts->find( $yaml->{checkout} );
-        }
-        if ( $yaml->{old_checkout} ) {
-            $checkout = Koha::Old::Checkouts->find( $yaml->{old_checkout} );
-        }
-        if ($checkout) {
-            $data->{checkout} = $checkout->unblessed;
-            $data->{patron}   = $checkout->patron->unblessed;
-            $data->{library}  = $checkout->library->unblessed;
+            my $data;
+            $data->{message} = $m->unblessed;
 
-            my $item = $checkout->item;
-            $data->{item}       = $item->unblessed;
-            $data->{biblio}     = $item->biblio->unblessed;
-            $data->{biblioitem} = $item->biblioitem->unblessed;
-        }
+            ## Handle 'checkout' / 'old_checkout'
+            my $checkout;
+            if ( $yaml->{checkout} ) {
+                $checkout = Koha::Checkouts->find( $yaml->{checkout} );
+            }
+            if ( $yaml->{old_checkout} ) {
+                $checkout = Koha::Old::Checkouts->find( $yaml->{old_checkout} );
+            }
+            if ($checkout) {
+                $data->{checkout} = $checkout->unblessed;
+                $data->{patron}   = $checkout->patron->unblessed;
+                $data->{library}  = $checkout->library->unblessed;
 
-        ## Handle 'checkouts'
-        if ( $yaml->{checkouts} ) {
-            my @checkouts = split( /,/, $yaml->{checkouts} );
-
-            foreach my $id (@checkouts) {
-                my $checkout = Koha::Checkouts->find($id);
-                next unless $checkout;
-
-                $data->{patron} //= $checkout->patron->unblessed;
-
-                my $subdata;
                 my $item = $checkout->item;
-                $subdata->{checkout}   = $checkout->unblessed;
-                $subdata->{library}    = $checkout->library->unblessed;
-                $subdata->{item}       = $item->unblessed;
-                $subdata->{biblio}     = $item->biblio->unblessed;
-                $subdata->{biblioitem} = $item->biblioitem->unblessed;
+                $data->{item}       = $item->unblessed;
+                $data->{biblio}     = $item->biblio->unblessed;
+                $data->{biblioitem} = $item->biblioitem->unblessed;
+            }
 
-                $data->{checkouts} //= [];
-                push( @{ $data->{checkouts} }, $subdata );
+            ## Handle 'checkouts'
+            if ( $yaml->{checkouts} ) {
+                my @checkouts = split( /,/, $yaml->{checkouts} );
+
+                foreach my $id (@checkouts) {
+                    my $checkout = Koha::Checkouts->find($id);
+                    next unless $checkout;
+
+                    $data->{patron} //= $checkout->patron->unblessed;
+
+                    my $subdata;
+                    my $item = $checkout->item;
+                    $subdata->{checkout}   = $checkout->unblessed;
+                    $subdata->{library}    = $checkout->library->unblessed;
+                    $subdata->{item}       = $item->unblessed;
+                    $subdata->{biblio}     = $item->biblio->unblessed;
+                    $subdata->{biblioitem} = $item->biblioitem->unblessed;
+
+                    $data->{checkouts} //= [];
+                    push( @{ $data->{checkouts} }, $subdata );
+                }
+            }
+
+            ## Handle 'hold'
+            if ( $yaml->{hold} ) {
+                my $hold = Koha::Holds->find( $yaml->{hold} );
+                next unless $hold;
+
+                $data->{hold}           = $hold->unblessed;
+                $data->{patron}         = $hold->patron->unblessed;
+                $data->{pickup_library} = $hold->branch->unblessed;
+
+                my $item = $hold->item;
+                $data->{item}       = $item->unblessed;
+                $data->{biblio}     = $item->biblio->unblessed;
+                $data->{biblioitem} = $item->biblioitem->unblessed;
+            }
+
+            ## Handle misc key/value pairs
+            $data->{library} //= Koha::Libraries->find( $yaml->{library} )
+              if $yaml->{library};
+            $data->{patron} //= Koha::Patrons->find( $yaml->{patron} )
+              if $yaml->{patron};
+            $data->{item} //= Koha::Items->find( $yaml->{item} )
+              if $yaml->{item};
+            $data->{biblio} //= Koha::Biblios->find( $yaml->{biblio} )
+              if $yaml->{biblio};
+            $data->{biblioitem} //=
+              Koha::Biblioitems->find( $yaml->{biblioitem} )
+              if $yaml->{biblioitem};
+
+            if ( keys %$data ) {
+                push( @message_data, $data );
+            }
+            else {
+                $m->status('failed')->update() unless $ENV{MESSAGEBEE_TEST_MODE};
             }
         }
-
-        ## Handle 'hold'
-        if ( $yaml->{hold} ) {
-            my $hold = Koha::Holds->find( $yaml->{hold} );
-            next unless $hold;
-
-            $data->{hold}           = $hold->unblessed;
-            $data->{patron}         = $hold->patron->unblessed;
-            $data->{pickup_library} = $hold->branch->unblessed;
-
-            my $item = $hold->item;
-            $data->{item}       = $item->unblessed;
-            $data->{biblio}     = $item->biblio->unblessed;
-            $data->{biblioitem} = $item->biblioitem->unblessed;
-        }
-
-        ## Handle misc key/value pairs
-        $data->{library} //= Koha::Libraries->find( $yaml->{library} )
-          if $yaml->{library};
-        $data->{patron} //= Koha::Patrons->find( $yaml->{patron} )
-          if $yaml->{patron};
-        $data->{item} //= Koha::Items->find( $yaml->{item} )
-          if $yaml->{item};
-        $data->{biblio} //= Koha::Biblios->find( $yaml->{biblio} )
-          if $yaml->{biblio};
-        $data->{biblioitem} //= Koha::Biblioitems->find( $yaml->{biblioitem} )
-          if $yaml->{biblioitem};
-
-        push( @message_data, $data );
     }
 
     if (@message_data) {
         my $json = encode_json( { messages => \@message_data } );
 
-        my $dir = tempdir( CLEANUP => 0 );
+        my $dir      = tempdir( CLEANUP => 0 );
         my $ts       = strftime( "%Y-%m-%dT%H-%M-%S", gmtime( time() ) );
         my $filename = "$ts.json";
         my $realpath = "$dir/$filename";
-        write_file( $realpath, $json );
-        say "FILE WRITTEN TO $realpath";
 
-        write_file( $ENV{'MESSAGEBEE_ARCHIVE_PATH'} . "/$filename", $json ) if $ENV{'MESSAGE_BEE_ARCHIVE_PATH'};
+        if ( $ENV{MESSAGE_BEE_ARCHIVE_PATH} ) {
+            my $archive_path = $ENV{MESSAGEBEE_ARCHIVE_PATH} . "/$filename";
+            write_file( $archive_path, $json );
+            say "FILE WRITTEN TO $archive_path";
+        }
 
-        my $host      = $self->retrieve_data('host');
-        my $username  = $self->retrieve_data('username');
-        my $password  = $self->retrieve_data('password');
-        my $directory = 'cust2unique';
+        unless ( $ENV{MESSAGEBEE_TEST_MODE} ) {
+            write_file( $realpath, $json );
+            say "FILE WRITTEN TO $realpath";
 
-        my $sftp = Net::SFTP::Foreign->new(
-            host     => $host,
-            user     => $username,
-            port     => 22,
-            password => $password
-        );
-        $sftp->die_on_error("Unable to establish SFTP connection");
-        $sftp->setcwd($directory)
-          or die "unable to change cwd: " . $sftp->error;
-        $sftp->put( $realpath, $filename ) or die "put failed: " . $sftp->error;
+            my $host      = $self->retrieve_data('host');
+            my $username  = $self->retrieve_data('username');
+            my $password  = $self->retrieve_data('password');
+            my $directory = 'cust2unique';
+
+            my $sftp = Net::SFTP::Foreign->new(
+                host     => $host,
+                user     => $username,
+                port     => 22,
+                password => $password
+            );
+            $sftp->die_on_error("Unable to establish SFTP connection");
+            $sftp->setcwd($directory)
+              or die "unable to change cwd: " . $sftp->error;
+            $sftp->put( $realpath, $filename )
+              or die "put failed: " . $sftp->error;
+        }
     }
 }
 
