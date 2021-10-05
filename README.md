@@ -45,6 +45,7 @@ CHECKIN:
 ---
 messagebee: yes
 old_checkout: [% old_checkout.issue_id %]
+patron: [% old_checkout.borrowernumber %]
 library: [% branch.id %]
 ----
 ```
