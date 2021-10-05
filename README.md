@@ -25,6 +25,7 @@ Other keys you may use are:
 * `library` - branches.branchcode
 * `patron` - borrowers.borrowernumber
 * `checkout` - issues.issue_id, auto-imports patron, library, item, biblio and biblioitem
+* `checkouts` - repeating comma delimited issues.issue_id
 
 Example notices:
 
