@@ -39,6 +39,16 @@ library: [% branch.id %]
 ----
 ```
 
+RENEWAL:
+```
+----
+---
+messagebee: yes
+checkout: [% checkout.id %]
+library: [% branch.id %]
+----
+```
+
 CHECKIN:
 ```
 ----
