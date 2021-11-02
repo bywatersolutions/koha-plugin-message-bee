@@ -34,6 +34,11 @@ our $metadata = {
       'Plugin to forward messages to MessageBee for processing and sending',
 };
 
+my $archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH};
+if ( $archive_dir && !-d $archive_dir ) {
+    make_path $archive_dir or die "Failed to create path: $archive_dir";
+}
+
 =head3 new
 
 =cut
