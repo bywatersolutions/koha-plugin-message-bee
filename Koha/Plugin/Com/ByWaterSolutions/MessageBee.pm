@@ -23,7 +23,7 @@ our $VERSION         = "{VERSION}";
 our $MINIMUM_VERSION = "{MINIMUM_VERSION}";
 
 our $metadata = {
-    name            => 'MessageBee',
+    name            => 'Unique Management Services - MessageBee',
     author          => 'Kyle M Hall',
     date_authored   => '2021-09-20',
     date_updated    => "1900-01-01",
