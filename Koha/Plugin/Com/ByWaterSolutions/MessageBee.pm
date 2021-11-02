@@ -9,7 +9,9 @@ use base qw(Koha::Plugins::Base);
 ## We will also need to include any Koha libraries we want to access
 use C4::Auth;
 use C4::Context;
+use Koha::DateUtils qw(dt_from_string);
 
+use DateTime;
 use File::Slurp qw(write_file);
 use File::Temp qw(tempdir);
 use Mojo::JSON qw(encode_json);
@@ -33,11 +35,6 @@ our $metadata = {
     description     =>
       'Plugin to forward messages to MessageBee for processing and sending',
 };
-
-my $archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH};
-if ( $archive_dir && !-d $archive_dir ) {
-    make_path $archive_dir or die "Failed to create path: $archive_dir";
-}
 
 =head3 new
 
@@ -142,7 +139,31 @@ in process_message_queue.pl
 sub before_send_messages {
     my ( $self, $params ) = @_;
 
-    say "MESSAGE BEE TEST MODE" if $ENV{MESSAGEBEE_TEST_MODE};
+    my $archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH};
+    my $test_mode = $ENV{MESSAGEBEE_TEST_MODE};
+
+    if ($archive_dir) {
+        if ( -d $archive_dir ) {
+            my $dt = dt_from_string();
+            $dt->subtract( days => 30 );
+            my $age_threshold = $dt->datetime;
+            opendir my $dir, $archive_dir or die "Cannot open directory: $!";
+            my @files = readdir $dir;
+            closedir $dir;
+
+            foreach my $f (@files) {
+                next unless $f =~ /json$/;
+                if ( $f lt $age_threshold ) {
+                    unlink( $archive_dir . "/" . $f );
+                }
+            }
+        }
+        else {
+            make_path $archive_dir or die "Failed to create path: $archive_dir";
+        }
+    }
+
+    say "MESSAGE BEE TEST MODE" if $test_mode;
 
     my $messages = Koha::Notice::Messages->search(
         {
@@ -174,7 +195,7 @@ sub before_send_messages {
             $messages_generated++;
             $messages_seen->{$m->message_id} = 1;
 
-            $m->status('sent')->update() unless $ENV{MESSAGEBEE_TEST_MODE};
+            $m->status('sent')->update() unless $test_mode;
 
             my $data;
             $data->{message} = $m->unblessed;
@@ -253,7 +274,7 @@ sub before_send_messages {
                 push( @message_data, $data );
             }
             else {
-                $m->status('failed')->update() unless $ENV{MESSAGEBEE_TEST_MODE};
+                $m->status('failed')->update() unless $test_mode;
             }
         }
     }
@@ -266,17 +287,17 @@ sub before_send_messages {
         my $json = encode_json( { messages => \@message_data } );
 
         my $dir      = tempdir( CLEANUP => 0 );
-        my $ts       = strftime( "%Y-%m-%dT%H-%M-%S", gmtime( time() ) );
+        my $td       = dt_from_string->datetime;
         my $filename = "$ts.json";
         my $realpath = "$dir/$filename";
 
-        if ( $ENV{MESSAGEBEE_ARCHIVE_PATH} ) {
-            my $archive_path = $ENV{MESSAGEBEE_ARCHIVE_PATH} . "/$filename";
+        if ( $archive_dir ) {
+            my $archive_path = $archive_dir . "/$filename";
             write_file( $archive_path, $json );
             say "FILE WRITTEN TO $archive_path";
         }
 
-        unless ( $ENV{MESSAGEBEE_TEST_MODE} ) {
+        unless ( $test_mode ) {
             write_file( $realpath, $json );
             say "FILE WRITTEN TO $realpath";
 
