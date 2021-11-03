@@ -288,7 +288,7 @@ sub before_send_messages {
 
         my $dir      = tempdir( CLEANUP => 0 );
         my $td       = dt_from_string->datetime;
-        my $filename = "$ts.json";
+        my $filename = "$td.json";
         my $realpath = "$dir/$filename";
 
         if ( $archive_dir ) {
