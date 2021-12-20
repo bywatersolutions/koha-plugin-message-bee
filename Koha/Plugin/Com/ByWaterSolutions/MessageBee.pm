@@ -286,9 +286,11 @@ sub before_send_messages {
     if (@message_data) {
         my $json = encode_json( { messages => \@message_data } );
 
+        my $library_name = C4::Context->preference('LibraryName');
+        $library_name =~ s/ /_/g;
         my $dir      = tempdir( CLEANUP => 0 );
-        my $td       = dt_from_string->datetime;
-        my $filename = "$td.json";
+        my $td       = dt_from_string->datetime->iso8601;
+        my $filename = "$td-Notices-$library_name.json";
         my $realpath = "$dir/$filename";
 
         if ( $archive_dir ) {
