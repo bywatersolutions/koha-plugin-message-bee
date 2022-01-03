@@ -102,6 +102,13 @@ messagebee: yes
 checkout: [% checkout.id %]
 ```
 
+AUTO_RENEWALS_DGST:
+```
+---
+messagebee: yes
+checkouts: [% FOREACH i IN issues %][% i.issue_id %],[% END %]
+```
+
 OVERDUE NOTICES:
 ```
 ---
