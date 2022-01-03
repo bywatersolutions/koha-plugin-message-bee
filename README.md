@@ -95,6 +95,13 @@ messagebee: yes
 checkouts: [% FOREACH i IN issues %][% i.issue_id %],[% END %]
 ```
 
+AUTO_RENEWALS:
+```
+---
+messagebee: yes
+checkout: [% checkout.id %]
+```
+
 OVERDUE NOTICES:
 ```
 ---
