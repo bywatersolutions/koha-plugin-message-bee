@@ -67,6 +67,17 @@ messagebee: yes
 hold: [% hold.id %]
 ```
 
+HOLD_CANCELLATION:
+```
+---
+messagebee: yes
+hold: [% hold.id %]
+library: [% branch.id %]
+biblio: [% biblio.id %]
+item: [% item.id %]
+patron: [% borrower.id %]
+```
+
 PREDUE:
 ```
 ---
