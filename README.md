@@ -78,6 +78,17 @@ item: [% item.id %]
 patron: [% borrower.id %]
 ```
 
+CANCEL_HOLD_ON_LOST:
+```
+---
+messagebee: yes
+hold: [% hold.id %]
+library: [% branch.id %]
+biblio: [% biblio.id %]
+item: [% item.id %]
+patron: [% borrower.id %]
+```
+
 PREDUE:
 ```
 ---
