@@ -89,6 +89,8 @@ item: [% item.id %]
 patron: [% borrower.id %]
 ```
 
+NOTE: Predue notices require Koha bug 29100.
+
 PREDUE:
 ```
 ---
