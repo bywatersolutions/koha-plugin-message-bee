@@ -247,27 +247,33 @@ sub before_send_messages {
                 my $hold = Koha::Holds->find( $yaml->{hold} );
                 next unless $hold;
 
+                my $biblio = $hold->biblio;
+                next unless $biblio;
+
+                my $biblioitem = $biblio->biblioitem;
+                next unless $biblioitem;
+
                 $data->{hold}           = $hold->unblessed;
                 $data->{patron}         = $hold->patron->unblessed;
                 $data->{pickup_library} = $hold->branch->unblessed;
+                $data->{biblio}         = $biblio->unblessed;
+                $data->{biblioitem}     = $biblioitem->unblessed;
 
-                my $item = $hold->item;
-                $data->{item}       = $item->unblessed;
-                $data->{biblio}     = $item->biblio->unblessed;
-                $data->{biblioitem} = $item->biblioitem->unblessed;
+                if ( my $item = $hold->item ) {
+                    $data->{item} = $item->unblessed;
+                }
             }
 
             ## Handle misc key/value pairs
-            $data->{library} = Koha::Libraries->find( $yaml->{library} )
+            $data->{library}    ||= Koha::Libraries->find( $yaml->{library} )->unblessed
               if $yaml->{library};
-            $data->{patron} = Koha::Patrons->find( $yaml->{patron} )
+            $data->{patron}     ||= Koha::Patrons->find( $yaml->{patron} )->unblessed
               if $yaml->{patron};
-            $data->{item} = Koha::Items->find( $yaml->{item} )
+            $data->{item}       ||= Koha::Items->find( $yaml->{item} )->unblessed
               if $yaml->{item};
-            $data->{biblio} = Koha::Biblios->find( $yaml->{biblio} )
+            $data->{biblio}     ||= Koha::Biblios->find( $yaml->{biblio} )->unblessed
               if $yaml->{biblio};
-            $data->{biblioitem} =
-              Koha::Biblioitems->find( $yaml->{biblioitem} )
+            $data->{biblioitem} ||= Koha::Biblioitems->find( $yaml->{biblioitem} )->unblessed
               if $yaml->{biblioitem};
 
             if ( keys %$data ) {
