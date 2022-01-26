@@ -168,6 +168,7 @@ sub before_send_messages {
     my $messages = Koha::Notice::Messages->search(
         {
             status => 'pending',
+            content => { -like => '%messagebee: yes%' },
         }
     );
 
@@ -295,8 +296,8 @@ sub before_send_messages {
         my $library_name = C4::Context->preference('LibraryName');
         $library_name =~ s/ /_/g;
         my $dir      = tempdir( CLEANUP => 0 );
-        my $td       = dt_from_string->datetime->iso8601;
-        my $filename = "$td-Notices-$library_name.json";
+        my $ts       = strftime( "%Y-%m-%dT%H-%M-%S", gmtime( time() ) );
+        my $filename = "$ts-Notices-$library_name.json";
         my $realpath = "$dir/$filename";
 
         if ( $archive_dir ) {
