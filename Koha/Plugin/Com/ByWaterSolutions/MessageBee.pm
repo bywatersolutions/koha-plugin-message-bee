@@ -265,6 +265,29 @@ sub before_send_messages {
                 }
             }
 
+            ## Handle 'holds'
+            if ( $yaml->{holds} ) {
+                my @holds = split( /,/, $yaml->{holds} );
+
+                foreach my $id (@holds) {
+                    my $hold = Koha::Checkouts->find($id);
+                    next unless $hold;
+
+                    $data->{patron} //= $hold->patron->unblessed;
+
+                    my $subdata;
+                    my $item = $hold->item;
+                    $subdata->{hold}       = $hold->unblessed;
+                    $subdata->{library}    = $hold->branch->unblessed;
+                    $subdata->{item}       = $item ? $item->unblessed : undef;
+                    $subdata->{biblio}     = $item ? $item->biblio->unblessed : undef;
+                    $subdata->{biblioitem} = $item ? $item->biblioitem->unblessed : undef;
+
+                    $data->{holds} //= [];
+                    push( @{ $data->{holds} }, $subdata );
+                }
+            }
+
             ## Handle misc key/value pairs
             $data->{library}    ||= Koha::Libraries->find( $yaml->{library} )->unblessed
               if $yaml->{library};
