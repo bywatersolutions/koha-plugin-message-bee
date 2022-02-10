@@ -67,6 +67,13 @@ messagebee: yes
 hold: [% hold.id %]
 ```
 
+HOLD_REMINDER:
+```
+---
+messagebee: yes
+checkouts: [% FOREACH h IN holds %][% h.id %],[% END %]
+```
+
 HOLD_CANCELLATION:
 ```
 ---
