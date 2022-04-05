@@ -71,7 +71,7 @@ HOLD_REMINDER:
 ```
 ---
 messagebee: yes
-checkouts: [% FOREACH h IN holds %][% h.id %],[% END %]
+holds: [% FOREACH h IN holds %][% h.id %],[% END %]
 ```
 
 HOLD_CANCELLATION:
