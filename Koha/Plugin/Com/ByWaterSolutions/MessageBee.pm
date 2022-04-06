@@ -193,7 +193,6 @@ sub before_send_messages {
             next unless $yaml->{messagebee};
             next unless $yaml->{messagebee} eq 'yes';
 
-            $messages_generated++;
             $messages_seen->{$m->message_id} = 1;
 
             $m->status('sent')->update() unless $test_mode;
@@ -315,6 +314,7 @@ sub before_send_messages {
             };
 
             if ( keys %$data ) {
+                $messages_generated++;
                 push( @message_data, $data );
             }
             else {
