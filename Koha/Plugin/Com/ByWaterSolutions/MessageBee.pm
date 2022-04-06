@@ -264,6 +264,28 @@ sub before_send_messages {
                 }
             }
 
+            ## Handle 'old_hold'
+            if ( $yaml->{old_hold} ) {
+                my $hold = Koha::Old::Holds->find( $yaml->{old_hold} );
+                next unless $hold;
+
+                my $biblio = Koha::Biblios->find( $hold->biblionumber );
+                next unless $biblio;
+
+                my $biblioitem = $biblio->biblioitem;
+                next unless $biblioitem;
+
+                $data->{hold}           = $hold->unblessed;
+                $data->{patron}         = Koha::Patrons->find( $hold->borrowernumber )->unblessed;
+                $data->{pickup_library} = Koha::Libraries->find( $hold->branchcode )->unblessed;
+                $data->{biblio}         = $biblio->unblessed;
+                $data->{biblioitem}     = $biblioitem->unblessed;
+
+                if ( my $item = Koha::Items->find( $hold->itemnumber ) ) {
+                    $data->{item} = $item->unblessed;
+                }
+            }
+
             ## Handle 'holds'
             if ( $yaml->{holds} ) {
                 my @holds = split( /,/, $yaml->{holds} );
