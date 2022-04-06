@@ -289,16 +289,30 @@ sub before_send_messages {
             }
 
             ## Handle misc key/value pairs
-            $data->{library}    ||= Koha::Libraries->find( $yaml->{library} )->unblessed
-              if $yaml->{library};
-            $data->{patron}     ||= Koha::Patrons->find( $yaml->{patron} )->unblessed
-              if $yaml->{patron};
-            $data->{item}       ||= Koha::Items->find( $yaml->{item} )->unblessed
-              if $yaml->{item};
-            $data->{biblio}     ||= Koha::Biblios->find( $yaml->{biblio} )->unblessed
-              if $yaml->{biblio};
-            $data->{biblioitem} ||= Koha::Biblioitems->find( $yaml->{biblioitem} )->unblessed
-              if $yaml->{biblioitem};
+            try {
+                $data->{library} ||=
+                  Koha::Libraries->find( $yaml->{library} )->unblessed
+                  if $yaml->{library};
+            };
+            try {
+                $data->{patron} ||=
+                  Koha::Patrons->find( $yaml->{patron} )->unblessed
+                  if $yaml->{patron};
+            };
+            try {
+                $data->{item} ||= Koha::Items->find( $yaml->{item} )->unblessed
+                  if $yaml->{item};
+            };
+            try {
+                $data->{biblio} ||=
+                  Koha::Biblios->find( $yaml->{biblio} )->unblessed
+                  if $yaml->{biblio};
+            };
+            try {
+                $data->{biblioitem} ||=
+                  Koha::Biblioitems->find( $yaml->{biblioitem} )->unblessed
+                  if $yaml->{biblioitem};
+            };
 
             if ( keys %$data ) {
                 push( @message_data, $data );
