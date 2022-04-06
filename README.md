@@ -78,7 +78,7 @@ HOLD_CANCELLATION:
 ```
 ---
 messagebee: yes
-hold: [% hold.id %]
+old_hold: [% hold.id %]
 library: [% branch.id %]
 ```
 
@@ -86,7 +86,7 @@ CANCEL_HOLD_ON_LOST:
 ```
 ---
 messagebee: yes
-hold: [% hold.id %]
+old_hold: [% hold.id %]
 library: [% branch.id %]
 ```
 
