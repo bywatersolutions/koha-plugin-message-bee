@@ -20,6 +20,20 @@
           "description":"Status of messaged, either 'sent' or 'failed'",
           "required":true,
           "type":"string"
+        },
+        {
+          "name":"subject",
+          "in":"query",
+          "description":"Subject of message",
+          "required":false,
+          "type":"string"
+        },
+        {
+          "name":"content",
+          "in":"query",
+          "description":"Content of message",
+          "required":false,
+          "type":"string"
         }
       ],
       "responses":{
@@ -60,7 +74,7 @@
           "name":"subject",
           "in":"query",
           "description":"Subject of message",
-          "required":true,
+          "required":false,
           "type":"string"
         },
         {

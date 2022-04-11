@@ -32,6 +32,8 @@ sub update_message_status {
 
     my $message_id = $c->validation->param('message_id');
     my $status     = $c->validation->param('status');
+    my $subject    = $c->validation->param('subject');
+    my $content    = $c->validation->param('content');
 
     my $message = Koha::Notice::Messages->find($message_id);
     unless ($message) {
@@ -44,11 +46,16 @@ sub update_message_status {
     unless ( $status eq 'sent' || $status eq 'failed' ) {
         return $c->render(
             status  => 500,
-            openapi => { error => "Invalid status value, must be 'sent', 'pending' or 'failed'" }
+            openapi => {
+                error =>
+                  "Invalid status value, must be 'sent', 'pending' or 'failed'"
+            }
         );
     }
 
     $message->status($status);
+    $message->subject($subject) if $subject;
+    $message->content($content) if $content;
     $message->store();
 
     return $c->render( status => 204, text => q{} );
@@ -58,20 +65,20 @@ sub update_message_content {
     my $c = shift->openapi->valid_input or return;
 
     my $message_id = $c->validation->param('message_id');
-    my $subject     = $c->validation->param('subject');
-    my $content     = $c->validation->param('content');
+    my $subject    = $c->validation->param('subject');
+    my $content    = $c->validation->param('content');
 
     my $message = Koha::Notice::Messages->find($message_id);
     unless ($message) {
         return $c->render(
-            content  => 404,
+            content => 404,
             openapi => { error => "Message not found." }
         );
     }
 
-    unless ( $content ) {
+    unless ($content) {
         return $c->render(
-            content  => 500,
+            content => 500,
             openapi => { error => "No message content provided" }
         );
     }
