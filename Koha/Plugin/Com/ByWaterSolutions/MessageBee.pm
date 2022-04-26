@@ -345,10 +345,6 @@ sub before_send_messages {
         }
     }
 
-
-    say "MESSAGES HANDLED: " . keys %$messages_seen;
-    say "MESSAGES GENERATED: $messages_generated";
-
     if (@message_data) {
         my $json = encode_json( { messages => \@message_data } );
 
