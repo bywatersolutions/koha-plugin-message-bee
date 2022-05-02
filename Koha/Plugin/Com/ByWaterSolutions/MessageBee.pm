@@ -12,6 +12,7 @@ use C4::Context;
 use Koha::DateUtils qw(dt_from_string);
 
 use DateTime;
+use File::Path qw(make_path);
 use File::Slurp qw(write_file);
 use File::Temp qw(tempdir);
 use Mojo::JSON qw(encode_json decode_json);
