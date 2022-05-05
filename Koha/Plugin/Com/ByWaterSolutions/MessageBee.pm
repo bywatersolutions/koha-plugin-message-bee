@@ -292,7 +292,7 @@ sub before_send_messages {
                 my @holds = split( /,/, $yaml->{holds} );
 
                 foreach my $id (@holds) {
-                    my $hold = Koha::Checkouts->find($id);
+                    my $hold = Koha::Holds->find($id);
                     next unless $hold;
 
                     $data->{patron} //= $hold->patron->unblessed;
