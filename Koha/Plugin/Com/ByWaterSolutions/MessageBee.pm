@@ -142,6 +142,7 @@ sub before_send_messages {
 
     my $archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH};
     my $test_mode = $ENV{MESSAGEBEE_TEST_MODE};
+    my $verbose = $ENV{MESSAGEBEE_VERBOSE};
 
     if ($archive_dir) {
         if ( -d $archive_dir ) {
@@ -177,6 +178,8 @@ sub before_send_messages {
     my $messages_seen = {};
     my $messages_generated = 0;
     while ( my $m = $messages->next ) {
+        say "WORKING ON MESSAGE " . $m->id if $verbose;
+        say "CONTENT:\n" . $m->content if $verbose > 2;
         my $content = $m->content();
 
         my @yaml;
@@ -184,6 +187,7 @@ sub before_send_messages {
             @yaml = Load $content;
         }
         catch {
+            say "LOADING YAML FAILED!:\n" . $m->content;
             @yaml = undef;
         };
 
@@ -339,6 +343,7 @@ sub before_send_messages {
             if ( keys %$data ) {
                 $messages_generated++;
                 push( @message_data, $data );
+                say "MESSAGE DATA: " . Data::Dumper::Dumper( $data ) if $verbose > 1;
             }
             else {
                 $m->status('failed')->update() unless $test_mode;
@@ -347,7 +352,8 @@ sub before_send_messages {
     }
 
     if (@message_data) {
-        my $json = encode_json( { messages => \@message_data } );
+        my $v = $VERSION eq "{VERSION}" ? "DEVELOPMENT VERSION" : $VERSION;
+        my $json = encode_json( { messagebee_plugin_version => $v, messages => \@message_data } );
 
         my $library_name = C4::Context->preference('LibraryName');
         $library_name =~ s/ /_/g;
