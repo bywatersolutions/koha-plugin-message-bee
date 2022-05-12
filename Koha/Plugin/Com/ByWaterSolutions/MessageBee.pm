@@ -210,14 +210,17 @@ sub before_send_messages {
                 $checkout = Koha::Old::Checkouts->find( $yaml->{old_checkout} );
             }
             if ($checkout) {
-                $data->{checkout} = $checkout->unblessed;
                 $data->{patron}   = $checkout->patron->unblessed;
                 $data->{library}  = $checkout->library->unblessed;
 
+                my $subdata;
                 my $item = $checkout->item;
-                $data->{item}       = $item->unblessed;
-                $data->{biblio}     = $item->biblio->unblessed;
-                $data->{biblioitem} = $item->biblioitem->unblessed;
+                $subdata->{checkout}   = $checkout->unblessed;
+                $subdata->{item}       = $item->unblessed;
+                $subdata->{biblio}     = $item->biblio->unblessed;
+                $subdata->{biblioitem} = $item->biblioitem->unblessed;
+
+                $data->{checkouts} = [ $subdata ];
             }
 
             ## Handle 'checkouts'
@@ -254,15 +257,19 @@ sub before_send_messages {
                 my $biblioitem = $biblio->biblioitem;
                 next unless $biblioitem;
 
-                $data->{hold}           = $hold->unblessed;
-                $data->{patron}         = $hold->patron->unblessed;
-                $data->{pickup_library} = $hold->branch->unblessed;
-                $data->{biblio}         = $biblio->unblessed;
-                $data->{biblioitem}     = $biblioitem->unblessed;
+                $data->{patron} = $hold->patron->unblessed;
+
+                my $subdata;
+                $subdata->{hold}           = $hold->unblessed;
+                $subdata->{pickup_library} = $hold->branch->unblessed;
+                $subdata->{biblio}         = $biblio->unblessed;
+                $subdata->{biblioitem}     = $biblioitem->unblessed;
 
                 if ( my $item = $hold->item ) {
-                    $data->{item} = $item->unblessed;
+                    $subdata->{item} = $item->unblessed;
                 }
+
+                $data->{holds} = [ $subdata ];
             }
 
             ## Handle 'old_hold'
@@ -276,15 +283,19 @@ sub before_send_messages {
                 my $biblioitem = $biblio->biblioitem;
                 next unless $biblioitem;
 
-                $data->{hold}           = $hold->unblessed;
-                $data->{patron}         = Koha::Patrons->find( $hold->borrowernumber )->unblessed;
-                $data->{pickup_library} = Koha::Libraries->find( $hold->branchcode )->unblessed;
-                $data->{biblio}         = $biblio->unblessed;
-                $data->{biblioitem}     = $biblioitem->unblessed;
+                $data->{patron} = $hold->patron->unblessed;
 
-                if ( my $item = Koha::Items->find( $hold->itemnumber ) ) {
-                    $data->{item} = $item->unblessed;
+                my $subdata;
+                $subdata->{hold}           = $hold->unblessed;
+                $subdata->{pickup_library} = $hold->branch->unblessed;
+                $subdata->{biblio}         = $biblio->unblessed;
+                $subdata->{biblioitem}     = $biblioitem->unblessed;
+
+                if ( my $item = $hold->item ) {
+                    $subdata->{item} = $item->unblessed;
                 }
+
+                $data->{holds} = [ $subdata ];
             }
 
             ## Handle 'holds'
