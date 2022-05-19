@@ -182,6 +182,8 @@ sub before_send_messages {
         say "CONTENT:\n" . $m->content if $verbose > 2;
         my $content = $m->content();
 
+        my $patron;
+
         my @yaml;
         try {
             @yaml = Load $content;
@@ -214,7 +216,8 @@ sub before_send_messages {
                 $checkout = Koha::Old::Checkouts->find( $yaml->{old_checkout} );
             }
             if ($checkout) {
-                $data->{patron}   = $checkout->patron->unblessed;
+                $patron = $checkout->patron;
+                $data->{patron}   = $patron->unblessed;
                 $data->{library}  = $checkout->library->unblessed;
 
                 my $subdata;
@@ -235,7 +238,8 @@ sub before_send_messages {
                     my $checkout = Koha::Checkouts->find($id);
                     next unless $checkout;
 
-                    $data->{patron} //= $checkout->patron->unblessed;
+                    $patron //= $checkoout->patron;
+                    $data->{patron} //= $patron->unblessed;
 
                     my $subdata;
                     my $item = $checkout->item;
@@ -261,7 +265,8 @@ sub before_send_messages {
                 my $biblioitem = $biblio->biblioitem;
                 next unless $biblioitem;
 
-                $data->{patron} = $hold->patron->unblessed;
+                $patron //= $hold->patron; 
+                $data->{patron} //= $patron->unblessed;
 
                 my $subdata;
                 $subdata->{hold}           = $hold->unblessed;
@@ -287,7 +292,8 @@ sub before_send_messages {
                 my $biblioitem = $biblio->biblioitem;
                 next unless $biblioitem;
 
-                $data->{patron} = $hold->patron->unblessed;
+                $patron //= $holld->patron;
+                $data->{patron} //= $patron->unblessed;
 
                 my $subdata;
                 $subdata->{hold}           = $hold->unblessed;
@@ -310,7 +316,8 @@ sub before_send_messages {
                     my $hold = Koha::Holds->find($id);
                     next unless $hold;
 
-                    $data->{patron} //= $hold->patron->unblessed;
+                    $patron //= $hold->patron;
+                    $data->{patron} //= $patron->unblessed;
 
                     my $subdata;
                     my $item = $hold->item;
@@ -332,9 +339,8 @@ sub before_send_messages {
                   if $yaml->{library};
             };
             try {
-                $data->{patron} ||=
-                  Koha::Patrons->find( $yaml->{patron} )->unblessed
-                  if $yaml->{patron};
+                $patron //= Koha::Patrons->find( $yaml->{patron} ) if $yaml->{patron};
+                $data->{patron} //= $patron->unblessed;
             };
             try {
                 $data->{item} ||= Koha::Items->find( $yaml->{item} )->unblessed
@@ -350,6 +356,8 @@ sub before_send_messages {
                   Koha::Biblioitems->find( $yaml->{biblioitem} )->unblessed
                   if $yaml->{biblioitem};
             };
+
+            $data->{patron}->{account_balance} = $patron->account->balance if $patron;
 
             if ( keys %$data ) {
                 $messages_generated++;
