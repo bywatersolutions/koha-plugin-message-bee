@@ -296,7 +296,7 @@ sub before_send_messages {
                     my $biblioitem = $biblio->biblioitem;
                     next unless $biblioitem;
 
-                    $patron //= $holld->patron;
+                    $patron //= $hold->patron;
                     $data->{patron} //= $patron->unblessed;
 
                     my $subdata;
