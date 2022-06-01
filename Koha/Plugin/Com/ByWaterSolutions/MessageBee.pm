@@ -178,195 +178,210 @@ sub before_send_messages {
     my $messages_seen = {};
     my $messages_generated = 0;
     while ( my $m = $messages->next ) {
-        say "WORKING ON MESSAGE " . $m->id if $verbose;
-        say "CONTENT:\n" . $m->content if $verbose > 2;
-        my $content = $m->content();
 
-        my $patron;
+        $m->status('sent')->update() unless $test_mode;
 
-        my @yaml;
         try {
-            @yaml = Load $content;
-        }
-        catch {
-            say "LOADING YAML FAILED!:\n" . $m->content;
-            @yaml = undef;
-        };
 
-        foreach my $yaml (@yaml) {
+            say "WORKING ON MESSAGE " . $m->id if $verbose;
+            say "CONTENT:\n" . $m->content     if $verbose > 2;
+            my $content = $m->content();
 
-            next unless $yaml;
-            next unless ref $yaml eq 'HASH';
-            next unless $yaml->{messagebee};
-            next unless $yaml->{messagebee} eq 'yes';
+            my $patron;
 
-            $messages_seen->{$m->message_id} = 1;
-
-            $m->status('sent')->update() unless $test_mode;
-
-            my $data;
-            $data->{message} = $m->unblessed;
-
-            ## Handle 'checkout' / 'old_checkout'
-            my $checkout;
-            if ( $yaml->{checkout} ) {
-                $checkout = Koha::Checkouts->find( $yaml->{checkout} );
+            my @yaml;
+            try {
+                @yaml = Load $content;
             }
-            if ( $yaml->{old_checkout} ) {
-                $checkout = Koha::Old::Checkouts->find( $yaml->{old_checkout} );
-            }
-            if ($checkout) {
-                $patron = $checkout->patron;
-                $data->{patron}   = $patron->unblessed;
-                $data->{library}  = $checkout->library->unblessed;
+            catch {
+                say "LOADING YAML FAILED!:\n" . $m->content;
+                @yaml = undef;
+            };
 
-                my $subdata;
-                my $item = $checkout->item;
-                $subdata->{checkout}   = $checkout->unblessed;
-                $subdata->{item}       = $item->unblessed;
-                $subdata->{biblio}     = $item->biblio->unblessed;
-                $subdata->{biblioitem} = $item->biblioitem->unblessed;
+            foreach my $yaml (@yaml) {
 
-                $data->{checkouts} = [ $subdata ];
-            }
+                next unless $yaml;
+                next unless ref $yaml eq 'HASH';
+                next unless $yaml->{messagebee};
+                next unless $yaml->{messagebee} eq 'yes';
 
-            ## Handle 'checkouts'
-            if ( $yaml->{checkouts} ) {
-                my @checkouts = split( /,/, $yaml->{checkouts} );
+                $messages_seen->{ $m->message_id } = 1;
 
-                foreach my $id (@checkouts) {
-                    my $checkout = Koha::Checkouts->find($id);
-                    next unless $checkout;
+                my $data;
+                $data->{message} = $m->unblessed;
 
-                    $patron //= $checkout->patron;
-                    $data->{patron} //= $patron->unblessed;
+                ## Handle 'checkout' / 'old_checkout'
+                my $checkout;
+                if ( $yaml->{checkout} ) {
+                    $checkout = Koha::Checkouts->find( $yaml->{checkout} );
+                }
+                if ( $yaml->{old_checkout} ) {
+                    $checkout =
+                      Koha::Old::Checkouts->find( $yaml->{old_checkout} );
+                }
+                if ($checkout) {
+                    $patron          = $checkout->patron;
+                    $data->{patron}  = $patron->unblessed;
+                    $data->{library} = $checkout->library->unblessed;
 
                     my $subdata;
                     my $item = $checkout->item;
                     $subdata->{checkout}   = $checkout->unblessed;
-                    $subdata->{library}    = $checkout->library->unblessed;
                     $subdata->{item}       = $item->unblessed;
                     $subdata->{biblio}     = $item->biblio->unblessed;
                     $subdata->{biblioitem} = $item->biblioitem->unblessed;
 
-                    $data->{checkouts} //= [];
-                    push( @{ $data->{checkouts} }, $subdata );
-                }
-            }
-
-            ## Handle 'hold'
-            if ( $yaml->{hold} ) {
-                my $hold = Koha::Holds->find( $yaml->{hold} );
-                next unless $hold;
-
-                my $biblio = $hold->biblio;
-                next unless $biblio;
-
-                my $biblioitem = $biblio->biblioitem;
-                next unless $biblioitem;
-
-                $patron //= $hold->patron; 
-                $data->{patron} //= $patron->unblessed;
-
-                my $subdata;
-                $subdata->{hold}           = $hold->unblessed;
-                $subdata->{pickup_library} = $hold->branch->unblessed;
-                $subdata->{biblio}         = $biblio->unblessed;
-                $subdata->{biblioitem}     = $biblioitem->unblessed;
-
-                if ( my $item = $hold->item ) {
-                    $subdata->{item} = $item->unblessed;
+                    $data->{checkouts} = [$subdata];
                 }
 
-                $data->{holds} = [ $subdata ];
-            }
+                ## Handle 'checkouts'
+                if ( $yaml->{checkouts} ) {
+                    my @checkouts = split( /,/, $yaml->{checkouts} );
 
-            ## Handle 'old_hold'
-            if ( $yaml->{old_hold} ) {
-                my $hold = Koha::Old::Holds->find( $yaml->{old_hold} );
-                next unless $hold;
+                    foreach my $id (@checkouts) {
+                        my $checkout = Koha::Checkouts->find($id);
+                        next unless $checkout;
 
-                my $biblio = Koha::Biblios->find( $hold->biblionumber );
-                next unless $biblio;
+                        $patron //= $checkout->patron;
+                        $data->{patron} //= $patron->unblessed;
 
-                my $biblioitem = $biblio->biblioitem;
-                next unless $biblioitem;
+                        my $subdata;
+                        my $item = $checkout->item;
+                        $subdata->{checkout}   = $checkout->unblessed;
+                        $subdata->{library}    = $checkout->library->unblessed;
+                        $subdata->{item}       = $item->unblessed;
+                        $subdata->{biblio}     = $item->biblio->unblessed;
+                        $subdata->{biblioitem} = $item->biblioitem->unblessed;
 
-                $patron //= $holld->patron;
-                $data->{patron} //= $patron->unblessed;
-
-                my $subdata;
-                $subdata->{hold}           = $hold->unblessed;
-                $subdata->{pickup_library} = $hold->branch->unblessed;
-                $subdata->{biblio}         = $biblio->unblessed;
-                $subdata->{biblioitem}     = $biblioitem->unblessed;
-
-                if ( my $item = $hold->item ) {
-                    $subdata->{item} = $item->unblessed;
+                        $data->{checkouts} //= [];
+                        push( @{ $data->{checkouts} }, $subdata );
+                    }
                 }
 
-                $data->{holds} = [ $subdata ];
-            }
-
-            ## Handle 'holds'
-            if ( $yaml->{holds} ) {
-                my @holds = split( /,/, $yaml->{holds} );
-
-                foreach my $id (@holds) {
-                    my $hold = Koha::Holds->find($id);
+                ## Handle 'hold'
+                if ( $yaml->{hold} ) {
+                    my $hold = Koha::Holds->find( $yaml->{hold} );
                     next unless $hold;
+
+                    my $biblio = $hold->biblio;
+                    next unless $biblio;
+
+                    my $biblioitem = $biblio->biblioitem;
+                    next unless $biblioitem;
 
                     $patron //= $hold->patron;
                     $data->{patron} //= $patron->unblessed;
 
                     my $subdata;
-                    my $item = $hold->item;
-                    $subdata->{hold}       = $hold->unblessed;
-                    $subdata->{library}    = $hold->branch->unblessed;
-                    $subdata->{item}       = $item ? $item->unblessed : undef;
-                    $subdata->{biblio}     = $item ? $item->biblio->unblessed : undef;
-                    $subdata->{biblioitem} = $item ? $item->biblioitem->unblessed : undef;
+                    $subdata->{hold}           = $hold->unblessed;
+                    $subdata->{pickup_library} = $hold->branch->unblessed;
+                    $subdata->{biblio}         = $biblio->unblessed;
+                    $subdata->{biblioitem}     = $biblioitem->unblessed;
 
-                    $data->{holds} //= [];
-                    push( @{ $data->{holds} }, $subdata );
+                    if ( my $item = $hold->item ) {
+                        $subdata->{item} = $item->unblessed;
+                    }
+
+                    $data->{holds} = [$subdata];
+                }
+
+                ## Handle 'old_hold'
+                if ( $yaml->{old_hold} ) {
+                    my $hold = Koha::Old::Holds->find( $yaml->{old_hold} );
+                    next unless $hold;
+
+                    my $biblio = Koha::Biblios->find( $hold->biblionumber );
+                    next unless $biblio;
+
+                    my $biblioitem = $biblio->biblioitem;
+                    next unless $biblioitem;
+
+                    $patron //= $holld->patron;
+                    $data->{patron} //= $patron->unblessed;
+
+                    my $subdata;
+                    $subdata->{hold}           = $hold->unblessed;
+                    $subdata->{pickup_library} = $hold->branch->unblessed;
+                    $subdata->{biblio}         = $biblio->unblessed;
+                    $subdata->{biblioitem}     = $biblioitem->unblessed;
+
+                    if ( my $item = $hold->item ) {
+                        $subdata->{item} = $item->unblessed;
+                    }
+
+                    $data->{holds} = [$subdata];
+                }
+
+                ## Handle 'holds'
+                if ( $yaml->{holds} ) {
+                    my @holds = split( /,/, $yaml->{holds} );
+
+                    foreach my $id (@holds) {
+                        my $hold = Koha::Holds->find($id);
+                        next unless $hold;
+
+                        $patron //= $hold->patron;
+                        $data->{patron} //= $patron->unblessed;
+
+                        my $subdata;
+                        my $item = $hold->item;
+                        $subdata->{hold}    = $hold->unblessed;
+                        $subdata->{library} = $hold->branch->unblessed;
+                        $subdata->{item}    = $item ? $item->unblessed : undef;
+                        $subdata->{biblio} =
+                          $item ? $item->biblio->unblessed : undef;
+                        $subdata->{biblioitem} =
+                          $item ? $item->biblioitem->unblessed : undef;
+
+                        $data->{holds} //= [];
+                        push( @{ $data->{holds} }, $subdata );
+                    }
+                }
+
+                ## Handle misc key/value pairs
+                try {
+                    $data->{library} ||=
+                      Koha::Libraries->find( $yaml->{library} )->unblessed
+                      if $yaml->{library};
+                };
+                try {
+                    $patron //= Koha::Patrons->find( $yaml->{patron} )
+                      if $yaml->{patron};
+                    $data->{patron} //= $patron->unblessed;
+                };
+                try {
+                    $data->{item} ||=
+                      Koha::Items->find( $yaml->{item} )->unblessed
+                      if $yaml->{item};
+                };
+                try {
+                    $data->{biblio} ||=
+                      Koha::Biblios->find( $yaml->{biblio} )->unblessed
+                      if $yaml->{biblio};
+                };
+                try {
+                    $data->{biblioitem} ||=
+                      Koha::Biblioitems->find( $yaml->{biblioitem} )->unblessed
+                      if $yaml->{biblioitem};
+                };
+
+                $data->{patron}->{account_balance} = $patron->account->balance
+                  if $patron;
+
+                if ( keys %$data ) {
+                    $messages_generated++;
+                    push( @message_data, $data );
+                    say "MESSAGE DATA: " . Data::Dumper::Dumper($data)
+                      if $verbose > 1;
+                }
+                else {
+                    $m->status('failed')->update() unless $test_mode;
                 }
             }
 
-            ## Handle misc key/value pairs
-            try {
-                $data->{library} ||=
-                  Koha::Libraries->find( $yaml->{library} )->unblessed
-                  if $yaml->{library};
-            };
-            try {
-                $patron //= Koha::Patrons->find( $yaml->{patron} ) if $yaml->{patron};
-                $data->{patron} //= $patron->unblessed;
-            };
-            try {
-                $data->{item} ||= Koha::Items->find( $yaml->{item} )->unblessed
-                  if $yaml->{item};
-            };
-            try {
-                $data->{biblio} ||=
-                  Koha::Biblios->find( $yaml->{biblio} )->unblessed
-                  if $yaml->{biblio};
-            };
-            try {
-                $data->{biblioitem} ||=
-                  Koha::Biblioitems->find( $yaml->{biblioitem} )->unblessed
-                  if $yaml->{biblioitem};
-            };
-
-            $data->{patron}->{account_balance} = $patron->account->balance if $patron;
-
-            if ( keys %$data ) {
-                $messages_generated++;
-                push( @message_data, $data );
-                say "MESSAGE DATA: " . Data::Dumper::Dumper( $data ) if $verbose > 1;
-            }
-            else {
-                $m->status('failed')->update() unless $test_mode;
-            }
+        }
+        catch {
+            $m->status('deleted')->update() unless $test_mode;
         }
     }
 
