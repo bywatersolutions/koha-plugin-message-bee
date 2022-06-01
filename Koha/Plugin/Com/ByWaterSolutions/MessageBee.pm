@@ -238,7 +238,7 @@ sub before_send_messages {
                     my $checkout = Koha::Checkouts->find($id);
                     next unless $checkout;
 
-                    $patron //= $checkoout->patron;
+                    $patron //= $checkout->patron;
                     $data->{patron} //= $patron->unblessed;
 
                     my $subdata;
