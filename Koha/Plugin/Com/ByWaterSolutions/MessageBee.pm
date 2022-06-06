@@ -392,7 +392,7 @@ sub before_send_messages {
     if (@message_data) {
         my $dev_version = '{' . 'VERSION' . '}'; # Prevents substitution
         my $v = $VERSION eq $dev_version ? "DEVELOPMENT VERSION" : $VERSION;
-        my $json = encode_json( { messagebee_plugin_version => $v, messages => \@message_data } );
+        my $json = encode_json( { json_structure_version => '2', messagebee_plugin_version => $v, messages => \@message_data } );
 
         my $library_name = C4::Context->preference('LibraryName');
         $library_name =~ s/ /_/g;
