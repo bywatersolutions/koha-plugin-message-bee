@@ -368,6 +368,10 @@ sub before_send_messages {
                 $data->{patron}->{account_balance} = $patron->account->balance
                   if $patron;
 
+                # UMS has requested the abstract field to be removed
+                # it greatly increases the file size and is not needed
+                delete $data->{biblio}->{abstract} if $data->{biblio};
+
                 if ( keys %$data ) {
                     $messages_generated++;
                     push( @message_data, $data );
