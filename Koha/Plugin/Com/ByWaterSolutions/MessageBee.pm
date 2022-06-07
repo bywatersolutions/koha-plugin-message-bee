@@ -414,7 +414,7 @@ sub before_send_messages {
             my $host      = $self->retrieve_data('host');
             my $username  = $self->retrieve_data('username');
             my $password  = $self->retrieve_data('password');
-            my $directory = 'cust2unique';
+            my $directory = $ENV{MESSAGEBEE_SFTP_DIR} || 'cust2unique';
 
             my $sftp = Net::SFTP::Foreign->new(
                 host     => $host,
