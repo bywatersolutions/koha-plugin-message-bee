@@ -9,6 +9,7 @@ use base qw(Koha::Plugins::Base);
 ## We will also need to include any Koha libraries we want to access
 use C4::Auth;
 use C4::Context;
+use C4::Log qw(logaction);
 use Koha::DateUtils qw(dt_from_string);
 
 use DateTime;
@@ -140,6 +141,8 @@ in process_message_queue.pl
 sub before_send_messages {
     my ( $self, $params ) = @_;
 
+    logaction( 'CRONJOBS', 'Start', 'MessageBee::before_send_messages', encode_json({ pid => $$ }) );
+
     my $archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH};
     my $test_mode = $ENV{MESSAGEBEE_TEST_MODE};
     my $verbose = $ENV{MESSAGEBEE_VERBOSE};
@@ -174,6 +177,7 @@ sub before_send_messages {
         }
     );
 
+    my $results = { sent => 0, failed => 0 };
     my @message_data;
     my $messages_seen = {};
     my $messages_generated = 0;
@@ -377,18 +381,22 @@ sub before_send_messages {
                     push( @message_data, $data );
                     say "MESSAGE DATA: " . Data::Dumper::Dumper($data)
                       if $verbose > 1;
+                    $results->{sent}++;
                 }
                 else {
                     $m->status('failed')->update() unless $test_mode;
+                    $results->{failed}++;
                 }
             }
 
         }
         catch {
             $m->status('deleted')->update() unless $test_mode;
+            $results->{failed}++;
         }
     }
 
+    my $filename;
     if (@message_data) {
         my $dev_version = '{' . 'VERSION' . '}'; # Prevents substitution
         my $v = $VERSION eq $dev_version ? "DEVELOPMENT VERSION" : $VERSION;
@@ -398,7 +406,7 @@ sub before_send_messages {
         $library_name =~ s/ /_/g;
         my $dir      = tempdir( CLEANUP => 0 );
         my $ts       = strftime( "%Y-%m-%dT%H-%M-%S", gmtime( time() ) );
-        my $filename = "$ts-Notices-$library_name.json";
+        $filename = "$ts-Notices-$library_name.json";
         my $realpath = "$dir/$filename";
 
         if ( $archive_dir ) {
@@ -429,6 +437,8 @@ sub before_send_messages {
               or die "put failed: " . $sftp->error;
         }
     }
+
+    logaction( 'CRONJOBS', 'End', 'MessageBee::before_send_messages', encode_json({ pid => $$, filename => $filename, results => $results }) );
 }
 
 sub api_routes {
