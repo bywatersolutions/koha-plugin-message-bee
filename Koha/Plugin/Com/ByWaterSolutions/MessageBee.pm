@@ -353,13 +353,17 @@ sub before_send_messages {
                 $results->{sent}++;
             }
             else {
-                $m->status('failed')->update() unless $test_mode;
+                $m->status('failed');
+                $m->failure_code("NO DATA");
+                $m->update() unless $test_mode;
                 $results->{failed}++;
             }
         }
       }
       catch {
-          $m->status('deleted')->update() unless $test_mode;
+          $m->status('failed');
+          $m->failure_code("ERROR: $_");
+          $m->update() unless $test_mode;
           $results->{failed}++;
       }
     }
