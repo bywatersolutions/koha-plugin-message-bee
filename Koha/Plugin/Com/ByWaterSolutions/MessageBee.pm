@@ -170,19 +170,23 @@ sub before_send_messages {
 
     say "MESSAGE BEE TEST MODE" if $test_mode;
 
-    my $messages = Koha::Notice::Messages->search(
+    my @messages = Koha::Notice::Messages->search(
         {
             status => 'pending',
             content => { -like => '%messagebee: yes%' },
         }
-    );
-    $messages->update({ status => 'deleted'}) unless $test_mode;
+    )->as_list();
+    unless ($test_mode) {
+        foreach my $m (@messages) {
+            $m->status('deleted')->update();
+        }
+    }
 
     my $results = { sent => 0, failed => 0 };
     my @message_data;
     my $messages_seen = {};
     my $messages_generated = 0;
-    while ( my $m = $messages->next ) {
+    foreach my $m ( @messages ) {
 
       try {
         say "WORKING ON MESSAGE " . $m->id if $verbose;
