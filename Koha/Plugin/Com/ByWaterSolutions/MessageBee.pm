@@ -176,6 +176,7 @@ sub before_send_messages {
             content => { -like => '%messagebee: yes%' },
         }
     );
+    $messages->update({ status => 'deleted'}) unless $test_mode;
 
     my $results = { sent => 0, failed => 0 };
     my @message_data;
@@ -205,8 +206,6 @@ sub before_send_messages {
             next unless $yaml->{messagebee} eq 'yes';
 
             $messages_seen->{$m->message_id} = 1;
-
-            $m->status('sent')->update() unless $test_mode;
 
             my $data;
             $data->{message} = $m->unblessed;
@@ -347,6 +346,7 @@ sub before_send_messages {
             };
 
             if ( keys %$data ) {
+                $m->status('sent')->update() unless $test_mode;
                 $messages_generated++;
                 push( @message_data, $data );
                 say "MESSAGE DATA: " . Data::Dumper::Dumper( $data ) if $verbose > 1;
