@@ -176,13 +176,13 @@ sub before_send_messages {
             content => { -like => '%messagebee: yes%' },
         }
     );
+    $messages->update({ status => 'deleted'}) unless $test_mode;
 
     my $results = { sent => 0, failed => 0 };
     my @message_data;
     my $messages_seen = {};
     my $messages_generated = 0;
     while ( my $m = $messages->next ) {
-
         $m->status('deleted')->update() unless $test_mode;
 
         try {
