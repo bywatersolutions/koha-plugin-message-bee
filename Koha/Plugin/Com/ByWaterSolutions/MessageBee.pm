@@ -183,7 +183,7 @@ sub before_send_messages {
     my $messages_generated = 0;
     while ( my $m = $messages->next ) {
 
-        $m->status('sent')->update() unless $test_mode;
+        $m->status('deleted')->update() unless $test_mode;
 
         try {
 
@@ -377,6 +377,7 @@ sub before_send_messages {
                 delete $data->{biblio}->{abstract} if $data->{biblio};
 
                 if ( keys %$data ) {
+                    $m->status('sent')->update() unless $test_mode;
                     $messages_generated++;
                     push( @message_data, $data );
                     say "MESSAGE DATA: " . Data::Dumper::Dumper($data)
