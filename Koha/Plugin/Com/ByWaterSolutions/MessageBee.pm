@@ -174,7 +174,7 @@ sub before_send_messages {
     my $search_params = {
         status => 'pending',
         content => { -like => '%messagebee: yes%' },
-    }
+    };
 
     say "SEARCH PARAMETERS: " . Data::Dumper::Dumper( $search_params ) if $verbose;
     if ( $params->{type} ) {
