@@ -188,7 +188,10 @@ sub before_send_messages {
         $search_params->{letter_code} = $params->{letter_code};
     }
 
-    my @messages = Koha::Notice::Messages->search($search_params)->as_list;
+    my $other_params = {};
+    $other_params->{rows} = $params->{limit} if $params->{limit};
+
+    my @messages = Koha::Notice::Messages->search($search_params, $other_params)->as_list;
 
     unless ($test_mode) {
         foreach my $m (@messages) {
