@@ -12,6 +12,7 @@ use C4::Context;
 use C4::Log qw(logaction);
 use Koha::DateUtils qw(dt_from_string);
 
+use Data::Dumper;
 use DateTime;
 use File::Path qw(make_path);
 use File::Slurp qw(write_file);
@@ -145,7 +146,7 @@ sub before_send_messages {
 
     my $archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH};
     my $test_mode = $ENV{MESSAGEBEE_TEST_MODE};
-    my $verbose = $ENV{MESSAGEBEE_VERBOSE};
+    my $verbose = $ENV{MESSAGEBEE_VERBOSE} || $params->{verbose};
 
     if ($archive_dir) {
         if ( -d $archive_dir ) {
@@ -170,12 +171,24 @@ sub before_send_messages {
 
     say "MESSAGE BEE TEST MODE" if $test_mode;
 
-    my @messages = Koha::Notice::Messages->search(
-        {
-            status => 'pending',
-            content => { -like => '%messagebee: yes%' },
+    my $search_params = {
+        status => 'pending',
+        content => { -like => '%messagebee: yes%' },
+    }
+
+    say "SEARCH PARAMETERS: " . Data::Dumper::Dumper( $search_params ) if $verbose;
+    if ( $params->{type} ) {
+        if ( $params->{type} eq 'messagebee' ) {
+            # Do nothing, process all messagebee messages, but Koha will not do any processing itself
+        } else {
+            $search_params->{message_transport_type} = $params->{type};
         }
-    )->as_list;
+    }
+    if ( $params->{letter_code} ) {
+        $search_params->{letter_code} = $params->{letter_code};
+    }
+
+    my @messages = Koha::Notice::Messages->search($search_params)->as_list;
 
     unless ($test_mode) {
         foreach my $m (@messages) {
