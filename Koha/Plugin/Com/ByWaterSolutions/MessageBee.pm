@@ -295,7 +295,7 @@ sub before_send_messages {
                     $data->{patron} //= $patron->unblessed;
 
                     my $subdata;
-                    $subdata->{hold}           = $hold->unblessed;
+                    $subdata->{holds}          = [ $hold->unblessed ];
                     $subdata->{pickup_library} = $hold->branch->unblessed;
                     $subdata->{biblio}         = $biblio->unblessed;
                     $subdata->{biblioitem}     = $biblioitem->unblessed;
@@ -322,7 +322,7 @@ sub before_send_messages {
                     $data->{patron} //= $patron->unblessed;
 
                     my $subdata;
-                    $subdata->{hold}           = $hold->unblessed;
+                    $subdata->{holds}          = [ $hold->unblessed ];
                     $subdata->{pickup_library} = $hold->branch->unblessed;
                     $subdata->{biblio}         = $biblio->unblessed;
                     $subdata->{biblioitem}     = $biblioitem->unblessed;
