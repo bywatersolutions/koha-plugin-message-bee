@@ -230,7 +230,7 @@ sub before_send_messages {
                 $messages_seen->{ $m->message_id } = 1;
 
                 my $data;
-                $data->{message} = $m->unblessed;
+                $data->{message} = $self->scrub_message( $m->unblessed );
 
                 ## Handle 'checkout' / 'old_checkout'
                 my $checkout;
@@ -243,14 +243,14 @@ sub before_send_messages {
                 }
                 if ($checkout) {
                     $patron          = $checkout->patron;
-                    $data->{patron}  = $patron->unblessed;
+                    $data->{patron}  = $self->scrub_patron( $patron->unblessed );
                     $data->{library} = $checkout->library->unblessed;
 
                     my $subdata;
                     my $item = $checkout->item;
                     $subdata->{checkout}   = $checkout->unblessed;
                     $subdata->{item}       = $item->unblessed;
-                    $subdata->{biblio}     = $item->biblio->unblessed;
+                    $subdata->{biblio}     = $self->scrub_biblio( $item->biblio->unblessed );
                     $subdata->{biblioitem} = $item->biblioitem->unblessed;
 
                     $data->{checkouts} = [$subdata];
@@ -265,14 +265,14 @@ sub before_send_messages {
                         next unless $checkout;
 
                         $patron //= $checkout->patron;
-                        $data->{patron} //= $patron->unblessed;
+                        $data->{patron} //= $self->scrub_patron( $patron->unblessed );
 
                         my $subdata;
                         my $item = $checkout->item;
                         $subdata->{checkout}   = $checkout->unblessed;
                         $subdata->{library}    = $checkout->library->unblessed;
                         $subdata->{item}       = $item->unblessed;
-                        $subdata->{biblio}     = $item->biblio->unblessed;
+                        $subdata->{biblio}     = $self->scrub_biblio( $item->biblio->unblessed );
                         $subdata->{biblioitem} = $item->biblioitem->unblessed;
 
                         $data->{checkouts} //= [];
@@ -292,12 +292,12 @@ sub before_send_messages {
                     next unless $biblioitem;
 
                     $patron //= $hold->patron;
-                    $data->{patron} //= $patron->unblessed;
+                    $data->{patron} //= $self->scrub_patron( $patron->unblessed );
 
                     my $subdata;
                     $subdata->{holds}          = [ $hold->unblessed ];
                     $subdata->{pickup_library} = $hold->branch->unblessed;
-                    $subdata->{biblio}         = $biblio->unblessed;
+                    $subdata->{biblio}         = $self->scrub_biblio( $biblio->unblessed );
                     $subdata->{biblioitem}     = $biblioitem->unblessed;
 
                     if ( my $item = $hold->item ) {
@@ -319,12 +319,12 @@ sub before_send_messages {
                     next unless $biblioitem;
 
                     $patron //= $hold->patron;
-                    $data->{patron} //= $patron->unblessed;
+                    $data->{patron} //= $self->scrub_patron( $patron->unblessed );
 
                     my $subdata;
                     $subdata->{holds}          = [ $hold->unblessed ];
                     $subdata->{pickup_library} = $hold->branch->unblessed;
-                    $subdata->{biblio}         = $biblio->unblessed;
+                    $subdata->{biblio}         = $self->scrub_biblio( $biblio->unblessed );
                     $subdata->{biblioitem}     = $biblioitem->unblessed;
 
                     if ( my $item = $hold->item ) {
@@ -343,7 +343,7 @@ sub before_send_messages {
                         next unless $hold;
 
                         $patron //= $hold->patron;
-                        $data->{patron} //= $patron->unblessed;
+                        $data->{patron} //= $self->scrub_patron( $patron->unblessed );
 
                         my $subdata;
                         my $item = $hold->item;
@@ -351,7 +351,7 @@ sub before_send_messages {
                         $subdata->{library} = $hold->branch->unblessed;
                         $subdata->{item}    = $item ? $item->unblessed : undef;
                         $subdata->{biblio} =
-                          $item ? $item->biblio->unblessed : undef;
+                          $item ? $self->scrub_biblio( $item->biblio->unblessed ) : undef;
                         $subdata->{biblioitem} =
                           $item ? $item->biblioitem->unblessed : undef;
 
@@ -369,7 +369,8 @@ sub before_send_messages {
                 try {
                     $patron //= Koha::Patrons->find( $yaml->{patron} )
                       if $yaml->{patron};
-                    $data->{patron} //= $patron->unblessed;
+                    $data->{patron} //= $self->scrub_patron( $patron->unblessed )
+                      if $patron;
                 };
                 try {
                     $data->{item} ||=
@@ -378,7 +379,7 @@ sub before_send_messages {
                 };
                 try {
                     $data->{biblio} ||=
-                      Koha::Biblios->find( $yaml->{biblio} )->unblessed
+                      $self->scrub_biblio( Koha::Biblios->find( $yaml->{biblio} )->unblessed )
                       if $yaml->{biblio};
                 };
                 try {
@@ -389,10 +390,6 @@ sub before_send_messages {
 
                 $data->{patron}->{account_balance} = $patron->account->balance
                   if $patron;
-
-                # UMS has requested the abstract field to be removed
-                # it greatly increases the file size and is not needed
-                delete $data->{biblio}->{abstract} if $data->{biblio};
 
                 if ( keys %$data ) {
                     $m->status('sent')->update() unless $test_mode;
@@ -462,6 +459,32 @@ sub before_send_messages {
     }
 
     logaction( 'CRONJOBS', 'End', 'MessageBee::before_send_messages', encode_json({ pid => $$, filename => $filename, results => $results }) );
+}
+
+sub scrub_biblio {
+    my ( $self, $biblio ) = @_;
+
+    delete $biblio->{abstract};
+
+    return $biblio;
+}
+
+sub scrub_patron {
+    my ( $self, $patron ) = @_;
+
+    delete $patron->{password};
+    delete $patron->{borrowernotes};
+
+    return $patron;
+}
+
+sub scrub_message {
+    my ( $self, $message ) = @_;
+
+    delete $message->{content};
+    delete $message->{metadata};
+
+    return $message;
 }
 
 sub api_routes {
