@@ -351,7 +351,7 @@ sub before_send_messages {
                             my $subdata;
                             my $item = $hold->item;
                             $subdata->{hold}    = $hold->unblessed;
-                            $subdata->{library} = $hold->branch->unblessed;
+                            $subdata->{pickup_library} = $hold->branch->unblessed;
                             $subdata->{item}    = $item ? $item->unblessed : undef;
                             $subdata->{biblio} =
                               $item ? $self->scrub_biblio( $item->biblio->unblessed ) : undef;
