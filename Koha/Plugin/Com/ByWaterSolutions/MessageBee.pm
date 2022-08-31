@@ -313,10 +313,10 @@ sub before_send_messages {
                     my $subdata;
                     my $item = $hold->item;
                     $subdata->{hold}       = $hold->unblessed;
-                    $subdata->{library}    = $hold->branch->unblessed;
                     $subdata->{item}       = $item ? $item->unblessed : undef;
                     $subdata->{biblio}     = $item ? $item->biblio->unblessed : undef;
                     $subdata->{biblioitem} = $item ? $item->biblioitem->unblessed : undef;
+                    $subdata->{pickup_library} = $hold->branch->unblessed;
 
                     $data->{holds} //= [];
                     push( @{ $data->{holds} }, $subdata );
