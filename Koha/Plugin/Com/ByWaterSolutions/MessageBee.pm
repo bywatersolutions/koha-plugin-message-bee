@@ -368,31 +368,55 @@ sub before_send_messages {
                         $data->{library} ||=
                           Koha::Libraries->find( $yaml->{library} )->unblessed
                           if $yaml->{library};
+                    }
+                    catch {
+                        say "MSGBEE - Fetching library failed - $_"; 
                     };
+
                     try {
                         $patron //= Koha::Patrons->find( $yaml->{patron} )
                           if $yaml->{patron};
                         $data->{patron} //= $self->scrub_patron( $patron->unblessed )
                           if $patron;
+                    }
+                    catch {
+                        say "MSGBEE - Fetching patron failed - $_"; 
                     };
+
                     try {
                         $data->{item} ||=
                           Koha::Items->find( $yaml->{item} )->unblessed
                           if $yaml->{item};
+                    }
+                    catch {
+                        say "MSGBEE - Fetching item failed - $_"; 
                     };
+
                     try {
                         $data->{biblio} ||=
                           $self->scrub_biblio( Koha::Biblios->find( $yaml->{biblio} )->unblessed )
                           if $yaml->{biblio};
+                    }
+                    catch {
+                        say "MSGBEE - Fetching biblio failed - $_"; 
                     };
+
                     try {
                         $data->{biblioitem} ||=
                           Koha::Biblioitems->find( $yaml->{biblioitem} )->unblessed
                           if $yaml->{biblioitem};
+                    }
+                    catch {
+                        say "MSGBEE - Fetching biblioitem failed - $_"; 
                     };
 
-                    $data->{patron}->{account_balance} = $patron->account->balance
-                      if $patron;
+                    try {
+                        $data->{patron}->{account_balance} = $patron->account->balance
+                          if $patron;
+                    }
+                    catch {
+                        say "MSGBEE - Fetching patron account balance failed - $_"; 
+                    };
 
                     if ( keys %$data ) {
                         $m->status('sent')->update() unless $test_mode;
@@ -412,10 +436,12 @@ sub before_send_messages {
 
             }
             catch {
+                say "MSGBEE - ERROR - Processing Message Failed - $_";
                 $m->status('failed');
                 $m->failure_code("ERROR: $_");
                 $m->update() unless $test_mode;
                 $results->{failed}++;
+                say "MSGBEE - ERROR - failure above was for message " . $m->id;
             }
         }
     }
