@@ -169,14 +169,14 @@ sub before_send_messages {
         }
     }
 
-    say "MESSAGE BEE TEST MODE" if $test_mode;
+    say "MSGBEE - MESSAGE BEE TEST MODE" if $test_mode;
 
     my $search_params = {
         status => 'pending',
         content => { -like => '%messagebee: yes%' },
     };
 
-    say "SEARCH PARAMETERS: " . Data::Dumper::Dumper( $search_params ) if $verbose;
+    say "MSGBEE - SEARCH PARAMETERS: " . Data::Dumper::Dumper( $search_params ) if $verbose;
     if ( $params->{type} ) {
         if ( $params->{type} eq 'messagebee' ) {
             # Do nothing, process all messagebee messages, but Koha will not do any processing itself
@@ -208,8 +208,8 @@ sub before_send_messages {
 
         foreach my $m ( @messages ) {
             try {
-                say "WORKING ON MESSAGE " . $m->id if $verbose;
-                say "CONTENT:\n" . $m->content     if $verbose > 2;
+                say "MSGBEE - WORKING ON MESSAGE " . $m->id if $verbose;
+                say "MSGBEE - CONTENT:\n" . $m->content     if $verbose > 2;
                 my $content = $m->content();
 
                 my $patron;
@@ -219,7 +219,7 @@ sub before_send_messages {
                     @yaml = Load $content;
                 }
                 catch {
-                    say "LOADING YAML FAILED!:\n" . $m->content;
+                    say "MSGBEE - LOADING YAML FAILED!:\n" . $m->content;
                     @yaml = undef;
                 };
 
@@ -398,7 +398,7 @@ sub before_send_messages {
                         $m->status('sent')->update() unless $test_mode;
                         $messages_generated++;
                         push( @message_data, $data );
-                        say "MESSAGE DATA: " . Data::Dumper::Dumper($data)
+                        say "MSGBEE - MESSAGE DATA: " . Data::Dumper::Dumper($data)
                           if $verbose > 1;
                         $results->{sent}++;
                     }
@@ -436,12 +436,12 @@ sub before_send_messages {
         if ( $archive_dir ) {
             my $archive_path = $archive_dir . "/$filename";
             write_file( $archive_path, $json );
-            say "FILE WRITTEN TO $archive_path";
+            say "MSGBEE - FILE WRITTEN TO $archive_path";
         }
 
         unless ( $test_mode ) {
             write_file( $realpath, $json );
-            say "FILE WRITTEN TO $realpath";
+            say "MSGBEE - FILE WRITTEN TO $realpath";
 
             my $host      = $self->retrieve_data('host');
             my $username  = $self->retrieve_data('username');
