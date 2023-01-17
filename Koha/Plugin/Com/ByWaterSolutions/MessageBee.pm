@@ -17,6 +17,7 @@ use DateTime;
 use File::Path qw(make_path);
 use File::Slurp qw(write_file);
 use File::Temp qw(tempdir);
+use Log::Log4perl qw(:easy);
 use Mojo::JSON qw(encode_json decode_json);
 use Net::SFTP::Foreign;
 use POSIX;
@@ -148,6 +149,22 @@ sub before_send_messages {
     my $test_mode = $ENV{MESSAGEBEE_TEST_MODE};
     my $verbose = $ENV{MESSAGEBEE_VERBOSE} || $params->{verbose};
 
+    my $library_name = C4::Context->preference('LibraryName');
+    $library_name =~ s/ /_/g;
+    my $dir      = tempdir( CLEANUP => 0 );
+    my $ts       = strftime( "%Y-%m-%dT%H-%M-%S", gmtime( time() ) );
+    my $filename = "$ts-Notices-$library_name.json";
+    my $realpath = "$dir/$filename";
+
+    Log::Log4perl->easy_init(
+        {
+            level => $DEBUG,
+            file  => ">>$archive_dir/$ts-Notices-$library_name.log"
+        }
+    );
+
+    INFO("Running MessageBee before_send_messages hook");
+
     if ($archive_dir) {
         if ( -d $archive_dir ) {
             my $dt = dt_from_string();
@@ -170,6 +187,7 @@ sub before_send_messages {
     }
 
     say "MSGBEE - MESSAGE BEE TEST MODE" if $test_mode;
+    INFO("TEST MODE IS ENABLED") if $test_mode;
 
     my $search_params = {
         status => 'pending',
@@ -177,6 +195,8 @@ sub before_send_messages {
     };
 
     say "MSGBEE - SEARCH PARAMETERS: " . Data::Dumper::Dumper( $search_params ) if $verbose;
+    INFO( "SEARCH PARAMETERS: " . Data::Dumper::Dumper( $search_params ) );
+
     if ( $params->{type} ) {
         if ( $params->{type} eq 'messagebee' ) {
             # Do nothing, process all messagebee messages, but Koha will not do any processing itself
@@ -190,6 +210,7 @@ sub before_send_messages {
 
     my $other_params = {};
     $other_params->{rows} = $params->{limit} if $params->{limit};
+    INFO( "OTHER PARAMETERS: " . Data::Dumper::Dumper( $search_params ) );
 
     my $results = { sent => 0, failed => 0 };
     my @message_data;
@@ -198,6 +219,7 @@ sub before_send_messages {
 
     while (1) {
         my @messages = Koha::Notice::Messages->search($search_params, $other_params)->as_list;
+        INFO("FOUND @messages MESSAGES TO PROCESS");
         last unless scalar @messages;
 
         unless ($test_mode) {
@@ -209,7 +231,9 @@ sub before_send_messages {
         foreach my $m ( @messages ) {
             try {
                 say "MSGBEE - WORKING ON MESSAGE " . $m->id if $verbose;
+                INFO("WORKING ON MESSAGE " . $m->id);
                 say "MSGBEE - CONTENT:\n" . $m->content     if $verbose > 2;
+                TRACE("MESSAGE CONTENTS: " . Data::Dumper::Dumper( $m->unblessed ));
                 my $content = $m->content();
 
                 my $patron;
@@ -220,6 +244,7 @@ sub before_send_messages {
                 }
                 catch {
                     say "MSGBEE - LOADING YAML FAILED!:\n" . $m->content;
+                    ERROR( "MSGBEE - LOADING YAML FAILED!:" . Data::Dumper::Dumper( $m->content ) );
                     @yaml = undef;
                 };
 
@@ -418,6 +443,7 @@ sub before_send_messages {
                         say "MSGBEE - Fetching patron account balance failed - $_"; 
                     };
 
+
                     if ( keys %$data ) {
                         $m->status('sent')->update() unless $test_mode;
                         $messages_generated++;
@@ -425,39 +451,36 @@ sub before_send_messages {
                         say "MSGBEE - MESSAGE DATA: " . Data::Dumper::Dumper($data)
                           if $verbose > 1;
                         $results->{sent}++;
+                        INFO("MESSAGE ${\($m->id)} SENT");
                     }
                     else {
                         $m->status('failed');
                         $m->failure_code("NO DATA");
                         $m->update() unless $test_mode;
                         $results->{failed}++;
+                        INFO("MESSAGE ${\($m->id)} FAILED");
                     }
                 }
 
             }
             catch {
                 say "MSGBEE - ERROR - Processing Message Failed - $_";
+                ERROR("Processing Message ${\( $m->id )} Failed - $_");
                 $m->status('failed');
                 $m->failure_code("ERROR: $_");
                 $m->update() unless $test_mode;
                 $results->{failed}++;
                 say "MSGBEE - ERROR - failure above was for message " . $m->id;
             }
+
+            INFO("FINISHED PROCESSING MESSAGE " . $m->id );
         }
     }
 
-    my $filename;
     if (@message_data) {
         my $dev_version = '{' . 'VERSION' . '}'; # Prevents substitution
         my $v = $VERSION eq $dev_version ? "DEVELOPMENT VERSION" : $VERSION;
         my $json = encode_json( { json_structure_version => '3', messagebee_plugin_version => $v, messages => \@message_data } );
-
-        my $library_name = C4::Context->preference('LibraryName');
-        $library_name =~ s/ /_/g;
-        my $dir      = tempdir( CLEANUP => 0 );
-        my $ts       = strftime( "%Y-%m-%dT%H-%M-%S", gmtime( time() ) );
-        $filename = "$ts-Notices-$library_name.json";
-        my $realpath = "$dir/$filename";
 
         if ( $archive_dir ) {
             my $archive_path = $archive_dir . "/$filename";
