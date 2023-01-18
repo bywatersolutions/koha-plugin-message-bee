@@ -465,13 +465,12 @@ sub before_send_messages {
 
             }
             catch {
-                say "MSGBEE - ERROR - Processing Message Failed - $_";
+                say "MSGBEE - ERROR - Processing Message ${\( $m->id )} Failed - $_";
                 ERROR("Processing Message ${\( $m->id )} Failed - $_");
                 $m->status('failed');
                 $m->failure_code("ERROR: $_");
                 $m->update() unless $test_mode;
                 $results->{failed}++;
-                say "MSGBEE - ERROR - failure above was for message " . $m->id;
             };
 
             INFO("FINISHED PROCESSING MESSAGE " . $m->id );
@@ -487,11 +486,13 @@ sub before_send_messages {
             my $archive_path = $archive_dir . "/$filename";
             write_file( $archive_path, $json );
             say "MSGBEE - FILE WRITTEN TO $archive_path";
+            INFO("MSGBEE - FILE WRITTEN TO $archive_path");
         }
 
         unless ( $test_mode ) {
             write_file( $realpath, $json );
             say "MSGBEE - FILE WRITTEN TO $realpath";
+            INFO("MSGBEE - FILE WRITTEN TO $realpath");
 
             my $host      = $self->retrieve_data('host');
             my $username  = $self->retrieve_data('username');
