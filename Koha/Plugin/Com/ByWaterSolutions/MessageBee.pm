@@ -162,6 +162,7 @@ sub before_send_messages {
             file  => ">>$archive_dir/$ts-Notices-$library_name.log"
         }
     );
+    say "MSGBEE - LOG WRITTEN TO $archive_dir/$ts-Notices-$library_name.log";
 
     INFO("Running MessageBee before_send_messages hook");
 
@@ -219,7 +220,7 @@ sub before_send_messages {
 
     while (1) {
         my @messages = Koha::Notice::Messages->search($search_params, $other_params)->as_list;
-        INFO("FOUND @messages MESSAGES TO PROCESS");
+        INFO("FOUND " . scalar @messages . " MESSAGES TO PROCESS");
         last unless scalar @messages;
 
         unless ($test_mode) {
@@ -471,7 +472,7 @@ sub before_send_messages {
                 $m->update() unless $test_mode;
                 $results->{failed}++;
                 say "MSGBEE - ERROR - failure above was for message " . $m->id;
-            }
+            };
 
             INFO("FINISHED PROCESSING MESSAGE " . $m->id );
         }
