@@ -18,6 +18,7 @@ use File::Path qw(make_path);
 use File::Slurp qw(write_file);
 use File::Temp qw(tempdir);
 use Log::Log4perl qw(:easy);
+use Log::Log4perl;
 use Mojo::JSON qw(encode_json decode_json);
 use Net::SFTP::Foreign;
 use POSIX;
@@ -176,7 +177,7 @@ sub before_send_messages {
             closedir $dir;
 
             foreach my $f (@files) {
-                next unless $f =~ /json$/;
+                next unless $f =~ /log|json$/;
                 if ( $f lt $age_threshold ) {
                     unlink( $archive_dir . "/" . $f );
                 }
