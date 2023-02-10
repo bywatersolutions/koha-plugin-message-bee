@@ -157,6 +157,15 @@ sub before_send_messages {
     my $filename = "$ts-Notices-$library_name.json";
     my $realpath = "$dir/$filename";
 
+    my $info = {
+        archive_dir  => $archive_dir,
+        test_mode    => $test_mode,
+        library_name => $library_name,
+        timestamp    => $ts,
+        filename     => $filename,
+        filepath     => $realpath,
+    };
+
     Log::Log4perl->easy_init(
         {
             level => $DEBUG,
@@ -172,7 +181,14 @@ sub before_send_messages {
             my $dt = dt_from_string();
             $dt->subtract( days => 30 );
             my $age_threshold = $dt->datetime;
-            opendir my $dir, $archive_dir or die "Cannot open directory: $!";
+            try {
+                opendir my $dir, $archive_dir or die "Cannot open directory: $!";
+            } catch {
+                $info->{error_message} = $_;
+                logaction( 'MESSAGEBEE', 'CREATE_DIR_FAILED', undef,
+                    JSON->new->pretty->encode($info), 'cron' );
+                die "Cannot open directory $archive_dir: $_";
+            };
             my @files = readdir $dir;
             closedir $dir;
 
@@ -196,9 +212,6 @@ sub before_send_messages {
         content => { -like => '%messagebee: yes%' },
     };
 
-    say "MSGBEE - SEARCH PARAMETERS: " . Data::Dumper::Dumper( $search_params ) if $verbose;
-    INFO( "SEARCH PARAMETERS: " . Data::Dumper::Dumper( $search_params ) );
-
     if ( $params->{type} ) {
         if ( $params->{type} eq 'messagebee' ) {
             # Do nothing, process all messagebee messages, but Koha will not do any processing itself
@@ -210,9 +223,14 @@ sub before_send_messages {
         $search_params->{letter_code} = $params->{letter_code};
     }
 
+    say "MSGBEE - SEARCH PARAMETERS: " . Data::Dumper::Dumper( $search_params ) if $verbose;
+    INFO( "SEARCH PARAMETERS: " . Data::Dumper::Dumper( $search_params ) );
+    $info->{search_params} = $search_params;
+
     my $other_params = {};
     $other_params->{rows} = $params->{limit} if $params->{limit};
     INFO( "OTHER PARAMETERS: " . Data::Dumper::Dumper( $search_params ) );
+    $info->{other_params} = $other_params;
 
     my $results = { sent => 0, failed => 0 };
     my @message_data;
@@ -231,6 +249,9 @@ sub before_send_messages {
         }
 
         foreach my $m ( @messages ) {
+            $info->{results}->{types}->{ $m->letter_code }
+              ->{ $m->message_transport_type }++;
+
             try {
                 say "MSGBEE - WORKING ON MESSAGE " . $m->id if $verbose;
                 INFO("WORKING ON MESSAGE " . $m->id);
@@ -454,12 +475,14 @@ sub before_send_messages {
                           if $verbose > 1;
                         $results->{sent}++;
                         INFO("MESSAGE ${\($m->id)} SENT");
+                        $info->{results}->{sent}->{successful}++;
                     }
                     else {
                         $m->status('failed');
                         $m->failure_code("NO DATA");
                         $m->update() unless $test_mode;
                         $results->{failed}++;
+                        $info->{results}->{sent}->{failed}++;
                         INFO("MESSAGE ${\($m->id)} FAILED");
                     }
                 }
@@ -471,6 +494,7 @@ sub before_send_messages {
                 $m->status('failed');
                 $m->failure_code("ERROR: $_");
                 $m->update() unless $test_mode;
+                $info->{results}->{sent}->{failed}++;
                 $results->{failed}++;
             };
 
@@ -506,15 +530,27 @@ sub before_send_messages {
                 port     => 22,
                 password => $password
             );
-            $sftp->die_on_error("Unable to establish SFTP connection");
-            $sftp->setcwd($directory)
-              or die "unable to change cwd: " . $sftp->error;
-            $sftp->put( $realpath, $filename )
-              or die "put failed: " . $sftp->error;
+
+            try {
+                $sftp->die_on_error("Unable to establish SFTP connection");
+                $sftp->setcwd($directory)
+                  or die "unable to change cwd: " . $sftp->error;
+                $sftp->put( $realpath, $filename )
+                  or die "put failed: " . $sftp->error;
+            } catch {
+                $info->{sftp_error_message} = $_;
+            }
         }
     }
 
-    logaction( 'CRONJOBS', 'End', 'MessageBee::before_send_messages', encode_json({ pid => $$, filename => $filename, results => $results }) );
+    logaction( 'MESSAGEBEE', 'MESSAGES_PROCESSED', undef,
+        JSON->new->pretty->encode($info), 'cron' );
+
+    logaction(
+        'CRONJOBS', 'End',
+        'MessageBee::before_send_messages',
+        encode_json( { pid => $$, filename => $filename, results => $results } )
+    );
 }
 
 sub scrub_biblio {
