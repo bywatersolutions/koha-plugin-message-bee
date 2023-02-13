@@ -303,6 +303,7 @@ sub before_send_messages {
                         $subdata->{item}       = $item->unblessed;
                         $subdata->{biblio}     = $self->scrub_biblio( $item->biblio->unblessed );
                         $subdata->{biblioitem} = $item->biblioitem->unblessed;
+                        $subdata->{itemtype}   = $item->itemtype->unblessed;
 
                         $data->{checkouts} = [$subdata];
                     }
@@ -325,6 +326,7 @@ sub before_send_messages {
                             $subdata->{item}       = $item->unblessed;
                             $subdata->{biblio}     = $self->scrub_biblio( $item->biblio->unblessed );
                             $subdata->{biblioitem} = $item->biblioitem->unblessed;
+                            $subdata->{itemtype}   = $item->itemtype->unblessed;
 
                             $data->{checkouts} //= [];
                             push( @{ $data->{checkouts} }, $subdata );
@@ -352,7 +354,8 @@ sub before_send_messages {
                         $subdata->{biblioitem}     = $biblioitem->unblessed;
 
                         if ( my $item = $hold->item ) {
-                            $subdata->{item} = $item->unblessed;
+                            $subdata->{item}     = $item->unblessed;
+                            $subdata->{itemtype} = $item->itemtype->unblessed;
                         }
 
                         $data->{holds} = [$subdata];
@@ -379,7 +382,8 @@ sub before_send_messages {
                         $subdata->{biblioitem}     = $biblioitem->unblessed;
 
                         if ( my $item = $hold->item ) {
-                            $subdata->{item} = $item->unblessed;
+                            $subdata->{item}     = $item->unblessed;
+                            $subdata->{itemtype} = $item->itemtype->unblessed;
                         }
 
                         $data->{holds} = [$subdata];
@@ -400,11 +404,12 @@ sub before_send_messages {
                             my $item = $hold->item;
                             $subdata->{hold}    = $hold->unblessed;
                             $subdata->{pickup_library} = $hold->branch->unblessed;
-                            $subdata->{item}    = $item ? $item->unblessed : undef;
-                            $subdata->{biblio} =
-                              $item ? $self->scrub_biblio( $item->biblio->unblessed ) : undef;
-                            $subdata->{biblioitem} =
-                              $item ? $item->biblioitem->unblessed : undef;
+                            if ($item) {
+                                $subdata->{item}       = $item->unblessed;
+                                $subdata->{itemtype}   = $item->itemtype->unblessed;
+                                $subdata->{biblio}     = $self->scrub_biblio($item->biblio->unblessed);
+                                $subdata->{biblioitem} = $item->biblioitem->unblessed;
+                            }
 
                             $data->{holds} //= [];
                             push( @{ $data->{holds} }, $subdata );
