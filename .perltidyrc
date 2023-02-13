@@ -12,4 +12,6 @@
 -wn      # Weld nested containers
 -isbc    # Don't indent comments without leading space
 -nst     # Don't output to STDOUT
-
+-ce      # cuddled elses
+-conv    # iterations = 4 or until convergence
+-xci     # extended continuation indentation ( also part of pbp )

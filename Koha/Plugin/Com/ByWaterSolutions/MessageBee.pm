@@ -37,8 +37,7 @@ our $metadata = {
     minimum_version => $MINIMUM_VERSION,
     maximum_version => undef,
     version         => $VERSION,
-    description     =>
-      'Plugin to forward messages to MessageBee for processing and sending',
+    description     => 'Plugin to forward messages to MessageBee for processing and sending',
 };
 
 =head3 new
@@ -46,7 +45,7 @@ our $metadata = {
 =cut
 
 sub new {
-    my ( $class, $args ) = @_;
+    my ($class, $args) = @_;
 
     ## We need to add our metadata here so our base class can access it
     $args->{'metadata'} = $metadata;
@@ -65,11 +64,11 @@ sub new {
 =cut
 
 sub configure {
-    my ( $self, $args ) = @_;
+    my ($self, $args) = @_;
     my $cgi = $self->{'cgi'};
 
-    unless ( $cgi->param('save') ) {
-        my $template = $self->get_template( { file => 'configure.tt' } );
+    unless ($cgi->param('save')) {
+        my $template = $self->get_template({file => 'configure.tt'});
 
         ## Grab the values we already have for our settings, if any exist
         $template->param(
@@ -78,16 +77,11 @@ sub configure {
             password => $self->retrieve_data('password'),
         );
 
-        $self->output_html( $template->output() );
-    }
-    else {
-        $self->store_data(
-            {
-                host     => $cgi->param('host'),
-                username => $cgi->param('username'),
-                password => $cgi->param('password'),
-            }
-        );
+        $self->output_html($template->output());
+    } else {
+        $self->store_data({
+            host => $cgi->param('host'), username => $cgi->param('username'), password => $cgi->param('password'),
+        });
         $self->go_home();
     }
 }
@@ -102,7 +96,7 @@ or false if it failed.
 =cut
 
 sub install() {
-    my ( $self, $args ) = @_;
+    my ($self, $args) = @_;
 
     return 1;
 }
@@ -115,7 +109,7 @@ plugin is installed over an existing older version of a plugin
 =cut
 
 sub upgrade {
-    my ( $self, $args ) = @_;
+    my ($self, $args) = @_;
 
     return 1;
 }
@@ -129,7 +123,7 @@ after ourselves!
 =cut
 
 sub uninstall() {
-    my ( $self, $args ) = @_;
+    my ($self, $args) = @_;
 
     return 1;
 }
@@ -142,18 +136,18 @@ in process_message_queue.pl
 =cut
 
 sub before_send_messages {
-    my ( $self, $params ) = @_;
+    my ($self, $params) = @_;
 
-    logaction( 'CRONJOBS', 'Start', 'MessageBee::before_send_messages', encode_json({ pid => $$ }) );
+    logaction('CRONJOBS', 'Start', 'MessageBee::before_send_messages', encode_json({pid => $$}));
 
     my $archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH};
-    my $test_mode = $ENV{MESSAGEBEE_TEST_MODE};
-    my $verbose = $ENV{MESSAGEBEE_VERBOSE} || $params->{verbose};
+    my $test_mode   = $ENV{MESSAGEBEE_TEST_MODE};
+    my $verbose     = $ENV{MESSAGEBEE_VERBOSE} || $params->{verbose};
 
     my $library_name = C4::Context->preference('LibraryName');
     $library_name =~ s/ /_/g;
-    my $dir      = tempdir( CLEANUP => 0 );
-    my $ts       = strftime( "%Y-%m-%dT%H-%M-%S", gmtime( time() ) );
+    my $dir      = tempdir(CLEANUP => 0);
+    my $ts       = strftime("%Y-%m-%dT%H-%M-%S", gmtime(time()));
     my $filename = "$ts-Notices-$library_name.json";
     my $realpath = "$dir/$filename";
 
@@ -166,27 +160,21 @@ sub before_send_messages {
         filepath     => $realpath,
     };
 
-    Log::Log4perl->easy_init(
-        {
-            level => $DEBUG,
-            file  => ">>$archive_dir/$ts-Notices-$library_name.log"
-        }
-    );
+    Log::Log4perl->easy_init({level => $DEBUG, file => ">>$archive_dir/$ts-Notices-$library_name.log"});
     say "MSGBEE - LOG WRITTEN TO $archive_dir/$ts-Notices-$library_name.log";
 
     INFO("Running MessageBee before_send_messages hook");
 
     if ($archive_dir) {
-        if ( -d $archive_dir ) {
+        if (-d $archive_dir) {
             my $dt = dt_from_string();
-            $dt->subtract( days => 30 );
+            $dt->subtract(days => 30);
             my $age_threshold = $dt->datetime;
             try {
                 opendir my $dir, $archive_dir or die "Cannot open directory: $!";
             } catch {
                 $info->{error_message} = $_;
-                logaction( 'MESSAGEBEE', 'CREATE_DIR_FAILED', undef,
-                    JSON->new->pretty->encode($info), 'cron' );
+                logaction('MESSAGEBEE', 'CREATE_DIR_FAILED', undef, JSON->new->pretty->encode($info), 'cron');
                 die "Cannot open directory $archive_dir: $_";
             };
             my @files = readdir $dir;
@@ -194,47 +182,44 @@ sub before_send_messages {
 
             foreach my $f (@files) {
                 next unless $f =~ /log|json$/;
-                if ( $f lt $age_threshold ) {
-                    unlink( $archive_dir . "/" . $f );
+                if ($f lt $age_threshold) {
+                    unlink($archive_dir . "/" . $f);
                 }
             }
-        }
-        else {
+        } else {
             make_path $archive_dir or die "Failed to create path: $archive_dir";
         }
     }
 
     say "MSGBEE - MESSAGE BEE TEST MODE" if $test_mode;
-    INFO("TEST MODE IS ENABLED") if $test_mode;
+    INFO("TEST MODE IS ENABLED")         if $test_mode;
 
-    my $search_params = {
-        status => 'pending',
-        content => { -like => '%messagebee: yes%' },
-    };
+    my $search_params = {status => 'pending', content => {-like => '%messagebee: yes%'},};
 
-    if ( $params->{type} ) {
-        if ( $params->{type} eq 'messagebee' ) {
+    if ($params->{type}) {
+        if ($params->{type} eq 'messagebee') {
+
             # Do nothing, process all messagebee messages, but Koha will not do any processing itself
         } else {
             $search_params->{message_transport_type} = $params->{type};
         }
     }
-    if ( $params->{letter_code} ) {
+    if ($params->{letter_code}) {
         $search_params->{letter_code} = $params->{letter_code};
     }
 
-    say "MSGBEE - SEARCH PARAMETERS: " . Data::Dumper::Dumper( $search_params ) if $verbose;
-    INFO( "SEARCH PARAMETERS: " . Data::Dumper::Dumper( $search_params ) );
+    say "MSGBEE - SEARCH PARAMETERS: " . Data::Dumper::Dumper($search_params) if $verbose;
+    INFO("SEARCH PARAMETERS: " . Data::Dumper::Dumper($search_params));
     $info->{search_params} = $search_params;
 
     my $other_params = {};
     $other_params->{rows} = $params->{limit} if $params->{limit};
-    INFO( "OTHER PARAMETERS: " . Data::Dumper::Dumper( $search_params ) );
+    INFO("OTHER PARAMETERS: " . Data::Dumper::Dumper($search_params));
     $info->{other_params} = $other_params;
 
-    my $results = { sent => 0, failed => 0 };
+    my $results = {sent => 0, failed => 0};
     my @message_data;
-    my $messages_seen = {};
+    my $messages_seen      = {};
     my $messages_generated = 0;
 
     while (1) {
@@ -248,15 +233,14 @@ sub before_send_messages {
             }
         }
 
-        foreach my $m ( @messages ) {
-            $info->{results}->{types}->{ $m->letter_code }
-              ->{ $m->message_transport_type }++;
+        foreach my $m (@messages) {
+            $info->{results}->{types}->{$m->letter_code}->{$m->message_transport_type}++;
 
             try {
                 say "MSGBEE - WORKING ON MESSAGE " . $m->id if $verbose;
                 INFO("WORKING ON MESSAGE " . $m->id);
-                say "MSGBEE - CONTENT:\n" . $m->content     if $verbose > 2;
-                TRACE("MESSAGE CONTENTS: " . Data::Dumper::Dumper( $m->unblessed ));
+                say "MSGBEE - CONTENT:\n" . $m->content if $verbose > 2;
+                TRACE("MESSAGE CONTENTS: " . Data::Dumper::Dumper($m->unblessed));
                 my $content = $m->content();
 
                 my $patron;
@@ -264,10 +248,9 @@ sub before_send_messages {
                 my @yaml;
                 try {
                     @yaml = Load $content;
-                }
-                catch {
+                } catch {
                     say "MSGBEE - LOADING YAML FAILED!:\n" . $m->content;
-                    ERROR( "MSGBEE - LOADING YAML FAILED!:" . Data::Dumper::Dumper( $m->content ) );
+                    ERROR("MSGBEE - LOADING YAML FAILED!:" . Data::Dumper::Dumper($m->content));
                     @yaml = undef;
                 };
 
@@ -278,30 +261,29 @@ sub before_send_messages {
                     next unless $yaml->{messagebee};
                     next unless $yaml->{messagebee} eq 'yes';
 
-                    $messages_seen->{ $m->message_id } = 1;
+                    $messages_seen->{$m->message_id} = 1;
 
                     my $data;
-                    $data->{message} = $self->scrub_message( $m->unblessed );
+                    $data->{message} = $self->scrub_message($m->unblessed);
 
                     ## Handle 'checkout' / 'old_checkout'
                     my $checkout;
-                    if ( $yaml->{checkout} ) {
-                        $checkout = Koha::Checkouts->find( $yaml->{checkout} );
+                    if ($yaml->{checkout}) {
+                        $checkout = Koha::Checkouts->find($yaml->{checkout});
                     }
-                    if ( $yaml->{old_checkout} ) {
-                        $checkout =
-                          Koha::Old::Checkouts->find( $yaml->{old_checkout} );
+                    if ($yaml->{old_checkout}) {
+                        $checkout = Koha::Old::Checkouts->find($yaml->{old_checkout});
                     }
                     if ($checkout) {
                         $patron          = $checkout->patron;
-                        $data->{patron}  = $self->scrub_patron( $patron->unblessed );
+                        $data->{patron}  = $self->scrub_patron($patron->unblessed);
                         $data->{library} = $checkout->library->unblessed;
 
                         my $subdata;
                         my $item = $checkout->item;
                         $subdata->{checkout}   = $checkout->unblessed;
                         $subdata->{item}       = $item->unblessed;
-                        $subdata->{biblio}     = $self->scrub_biblio( $item->biblio->unblessed );
+                        $subdata->{biblio}     = $self->scrub_biblio($item->biblio->unblessed);
                         $subdata->{biblioitem} = $item->biblioitem->unblessed;
                         $subdata->{itemtype}   = $item->itemtype->unblessed;
 
@@ -309,33 +291,33 @@ sub before_send_messages {
                     }
 
                     ## Handle 'checkouts'
-                    if ( $yaml->{checkouts} ) {
-                        my @checkouts = split( /,/, $yaml->{checkouts} );
+                    if ($yaml->{checkouts}) {
+                        my @checkouts = split(/,/, $yaml->{checkouts});
 
                         foreach my $id (@checkouts) {
                             my $checkout = Koha::Checkouts->find($id);
                             next unless $checkout;
 
                             $patron //= $checkout->patron;
-                            $data->{patron} //= $self->scrub_patron( $patron->unblessed );
+                            $data->{patron} //= $self->scrub_patron($patron->unblessed);
 
                             my $subdata;
                             my $item = $checkout->item;
                             $subdata->{checkout}   = $checkout->unblessed;
                             $subdata->{library}    = $checkout->library->unblessed;
                             $subdata->{item}       = $item->unblessed;
-                            $subdata->{biblio}     = $self->scrub_biblio( $item->biblio->unblessed );
+                            $subdata->{biblio}     = $self->scrub_biblio($item->biblio->unblessed);
                             $subdata->{biblioitem} = $item->biblioitem->unblessed;
                             $subdata->{itemtype}   = $item->itemtype->unblessed;
 
                             $data->{checkouts} //= [];
-                            push( @{ $data->{checkouts} }, $subdata );
+                            push(@{$data->{checkouts}}, $subdata);
                         }
                     }
 
                     ## Handle 'hold'
-                    if ( $yaml->{hold} ) {
-                        my $hold = Koha::Holds->find( $yaml->{hold} );
+                    if ($yaml->{hold}) {
+                        my $hold = Koha::Holds->find($yaml->{hold});
                         next unless $hold;
 
                         my $biblio = $hold->biblio;
@@ -345,15 +327,15 @@ sub before_send_messages {
                         next unless $biblioitem;
 
                         $patron //= $hold->patron;
-                        $data->{patron} //= $self->scrub_patron( $patron->unblessed );
+                        $data->{patron} //= $self->scrub_patron($patron->unblessed);
 
                         my $subdata;
                         $subdata->{hold}           = $hold->unblessed;
                         $subdata->{pickup_library} = $hold->branch->unblessed;
-                        $subdata->{biblio}         = $self->scrub_biblio( $biblio->unblessed );
+                        $subdata->{biblio}         = $self->scrub_biblio($biblio->unblessed);
                         $subdata->{biblioitem}     = $biblioitem->unblessed;
 
-                        if ( my $item = $hold->item ) {
+                        if (my $item = $hold->item) {
                             $subdata->{item}     = $item->unblessed;
                             $subdata->{itemtype} = $item->itemtype->unblessed;
                         }
@@ -362,26 +344,26 @@ sub before_send_messages {
                     }
 
                     ## Handle 'old_hold'
-                    if ( $yaml->{old_hold} ) {
-                        my $hold = Koha::Old::Holds->find( $yaml->{old_hold} );
+                    if ($yaml->{old_hold}) {
+                        my $hold = Koha::Old::Holds->find($yaml->{old_hold});
                         next unless $hold;
 
-                        my $biblio = Koha::Biblios->find( $hold->biblionumber );
+                        my $biblio = Koha::Biblios->find($hold->biblionumber);
                         next unless $biblio;
 
                         my $biblioitem = $biblio->biblioitem;
                         next unless $biblioitem;
 
                         $patron //= $hold->patron;
-                        $data->{patron} //= $self->scrub_patron( $patron->unblessed );
+                        $data->{patron} //= $self->scrub_patron($patron->unblessed);
 
                         my $subdata;
-                        $subdata->{holds}          = [ $hold->unblessed ];
+                        $subdata->{holds}          = [$hold->unblessed];
                         $subdata->{pickup_library} = $hold->branch->unblessed;
-                        $subdata->{biblio}         = $self->scrub_biblio( $biblio->unblessed );
+                        $subdata->{biblio}         = $self->scrub_biblio($biblio->unblessed);
                         $subdata->{biblioitem}     = $biblioitem->unblessed;
 
-                        if ( my $item = $hold->item ) {
+                        if (my $item = $hold->item) {
                             $subdata->{item}     = $item->unblessed;
                             $subdata->{itemtype} = $item->itemtype->unblessed;
                         }
@@ -390,19 +372,19 @@ sub before_send_messages {
                     }
 
                     ## Handle 'holds'
-                    if ( $yaml->{holds} ) {
-                        my @holds = split( /,/, $yaml->{holds} );
+                    if ($yaml->{holds}) {
+                        my @holds = split(/,/, $yaml->{holds});
 
                         foreach my $id (@holds) {
                             my $hold = Koha::Holds->find($id);
                             next unless $hold;
 
                             $patron //= $hold->patron;
-                            $data->{patron} //= $self->scrub_patron( $patron->unblessed );
+                            $data->{patron} //= $self->scrub_patron($patron->unblessed);
 
                             my $subdata;
                             my $item = $hold->item;
-                            $subdata->{hold}    = $hold->unblessed;
+                            $subdata->{hold}           = $hold->unblessed;
                             $subdata->{pickup_library} = $hold->branch->unblessed;
                             if ($item) {
                                 $subdata->{item}       = $item->unblessed;
@@ -412,77 +394,60 @@ sub before_send_messages {
                             }
 
                             $data->{holds} //= [];
-                            push( @{ $data->{holds} }, $subdata );
+                            push(@{$data->{holds}}, $subdata);
                         }
                     }
 
                     ## Handle misc key/value pairs
                     try {
-                        $data->{library} ||=
-                          Koha::Libraries->find( $yaml->{library} )->unblessed
-                          if $yaml->{library};
-                    }
-                    catch {
-                        say "MSGBEE - Fetching library failed - $_"; 
+                        $data->{library} ||= Koha::Libraries->find($yaml->{library})->unblessed if $yaml->{library};
+                    } catch {
+                        say "MSGBEE - Fetching library failed - $_";
                     };
 
                     try {
-                        $patron //= Koha::Patrons->find( $yaml->{patron} )
-                          if $yaml->{patron};
-                        $data->{patron} //= $self->scrub_patron( $patron->unblessed )
-                          if $patron;
-                    }
-                    catch {
-                        say "MSGBEE - Fetching patron failed - $_"; 
+                        $patron         //= Koha::Patrons->find($yaml->{patron})    if $yaml->{patron};
+                        $data->{patron} //= $self->scrub_patron($patron->unblessed) if $patron;
+                    } catch {
+                        say "MSGBEE - Fetching patron failed - $_";
                     };
 
                     try {
-                        $data->{item} ||=
-                          Koha::Items->find( $yaml->{item} )->unblessed
-                          if $yaml->{item};
-                    }
-                    catch {
-                        say "MSGBEE - Fetching item failed - $_"; 
+                        $data->{item} ||= Koha::Items->find($yaml->{item})->unblessed if $yaml->{item};
+                    } catch {
+                        say "MSGBEE - Fetching item failed - $_";
                     };
 
                     try {
-                        $data->{biblio} ||=
-                          $self->scrub_biblio( Koha::Biblios->find( $yaml->{biblio} )->unblessed )
-                          if $yaml->{biblio};
-                    }
-                    catch {
-                        say "MSGBEE - Fetching biblio failed - $_"; 
+                        $data->{biblio} ||= $self->scrub_biblio(Koha::Biblios->find($yaml->{biblio})->unblessed)
+                            if $yaml->{biblio};
+                    } catch {
+                        say "MSGBEE - Fetching biblio failed - $_";
                     };
 
                     try {
-                        $data->{biblioitem} ||=
-                          Koha::Biblioitems->find( $yaml->{biblioitem} )->unblessed
-                          if $yaml->{biblioitem};
-                    }
-                    catch {
-                        say "MSGBEE - Fetching biblioitem failed - $_"; 
+                        $data->{biblioitem} ||= Koha::Biblioitems->find($yaml->{biblioitem})->unblessed
+                            if $yaml->{biblioitem};
+                    } catch {
+                        say "MSGBEE - Fetching biblioitem failed - $_";
                     };
 
                     try {
-                        $data->{patron}->{account_balance} = $patron->account->balance
-                          if $patron;
-                    }
-                    catch {
-                        say "MSGBEE - Fetching patron account balance failed - $_"; 
+                        $data->{patron}->{account_balance} = $patron->account->balance if $patron;
+                    } catch {
+                        say "MSGBEE - Fetching patron account balance failed - $_";
                     };
 
 
-                    if ( keys %$data ) {
+                    if (keys %$data) {
                         $m->status('sent')->update() unless $test_mode;
                         $messages_generated++;
-                        push( @message_data, $data );
-                        say "MSGBEE - MESSAGE DATA: " . Data::Dumper::Dumper($data)
-                          if $verbose > 1;
+                        push(@message_data, $data);
+                        say "MSGBEE - MESSAGE DATA: " . Data::Dumper::Dumper($data) if $verbose > 1;
                         $results->{sent}++;
                         INFO("MESSAGE ${\($m->id)} SENT");
                         $info->{results}->{sent}->{successful}++;
-                    }
-                    else {
+                    } else {
                         $m->status('failed');
                         $m->failure_code("NO DATA");
                         $m->update() unless $test_mode;
@@ -492,8 +457,7 @@ sub before_send_messages {
                     }
                 }
 
-            }
-            catch {
+            } catch {
                 say "MSGBEE - ERROR - Processing Message ${\( $m->id )} Failed - $_";
                 ERROR("Processing Message ${\( $m->id )} Failed - $_");
                 $m->status('failed');
@@ -503,24 +467,25 @@ sub before_send_messages {
                 $results->{failed}++;
             };
 
-            INFO("FINISHED PROCESSING MESSAGE " . $m->id );
+            INFO("FINISHED PROCESSING MESSAGE " . $m->id);
         }
     }
 
     if (@message_data) {
-        my $dev_version = '{' . 'VERSION' . '}'; # Prevents substitution
-        my $v = $VERSION eq $dev_version ? "DEVELOPMENT VERSION" : $VERSION;
-        my $json = encode_json( { json_structure_version => '3', messagebee_plugin_version => $v, messages => \@message_data } );
+        my $dev_version = '{' . 'VERSION' . '}';                                         # Prevents substitution
+        my $v           = $VERSION eq $dev_version ? "DEVELOPMENT VERSION" : $VERSION;
+        my $json
+            = encode_json({json_structure_version => '3', messagebee_plugin_version => $v, messages => \@message_data});
 
-        if ( $archive_dir ) {
+        if ($archive_dir) {
             my $archive_path = $archive_dir . "/$filename";
-            write_file( $archive_path, $json );
+            write_file($archive_path, $json);
             say "MSGBEE - FILE WRITTEN TO $archive_path";
             INFO("MSGBEE - FILE WRITTEN TO $archive_path");
         }
 
-        unless ( $test_mode ) {
-            write_file( $realpath, $json );
+        unless ($test_mode) {
+            write_file($realpath, $json);
             say "MSGBEE - FILE WRITTEN TO $realpath";
             INFO("MSGBEE - FILE WRITTEN TO $realpath");
 
@@ -529,37 +494,29 @@ sub before_send_messages {
             my $password  = $self->retrieve_data('password');
             my $directory = $ENV{MESSAGEBEE_SFTP_DIR} || 'cust2unique';
 
-            my $sftp = Net::SFTP::Foreign->new(
-                host     => $host,
-                user     => $username,
-                port     => 22,
-                password => $password
-            );
+            my $sftp = Net::SFTP::Foreign->new(host => $host, user => $username, port => 22, password => $password);
 
             try {
                 $sftp->die_on_error("Unable to establish SFTP connection");
-                $sftp->setcwd($directory)
-                  or die "unable to change cwd: " . $sftp->error;
-                $sftp->put( $realpath, $filename )
-                  or die "put failed: " . $sftp->error;
+                $sftp->setcwd($directory)        or die "unable to change cwd: " . $sftp->error;
+                $sftp->put($realpath, $filename) or die "put failed: " . $sftp->error;
             } catch {
                 $info->{sftp_error_message} = $_;
             }
         }
     }
 
-    logaction( 'MESSAGEBEE', 'MESSAGES_PROCESSED', undef,
-        JSON->new->pretty->encode($info), 'cron' );
+    logaction('MESSAGEBEE', 'MESSAGES_PROCESSED', undef, JSON->new->pretty->encode($info), 'cron');
 
     logaction(
         'CRONJOBS', 'End',
         'MessageBee::before_send_messages',
-        encode_json( { pid => $$, filename => $filename, results => $results } )
+        encode_json({pid => $$, filename => $filename, results => $results})
     );
 }
 
 sub scrub_biblio {
-    my ( $self, $biblio ) = @_;
+    my ($self, $biblio) = @_;
 
     delete $biblio->{abstract};
 
@@ -567,7 +524,7 @@ sub scrub_biblio {
 }
 
 sub scrub_patron {
-    my ( $self, $patron ) = @_;
+    my ($self, $patron) = @_;
 
     delete $patron->{password};
     delete $patron->{borrowernotes};
@@ -576,7 +533,7 @@ sub scrub_patron {
 }
 
 sub scrub_message {
-    my ( $self, $message ) = @_;
+    my ($self, $message) = @_;
 
     delete $message->{content};
     delete $message->{metadata};
@@ -585,7 +542,7 @@ sub scrub_message {
 }
 
 sub api_routes {
-    my ( $self, $args ) = @_;
+    my ($self, $args) = @_;
 
     my $spec_str = $self->mbf_read('openapi.json');
     my $spec     = decode_json($spec_str);
