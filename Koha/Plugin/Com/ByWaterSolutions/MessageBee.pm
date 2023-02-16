@@ -138,7 +138,7 @@ in process_message_queue.pl
 sub before_send_messages {
     my ($self, $params) = @_;
 
-    logaction('CRONJOBS', 'Start', 'MessageBee::before_send_messages', encode_json({pid => $$}));
+    logaction('MESSAGEBEE', 'STARTED', undef, undef, 'cron');
 
     my $archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH};
     my $test_mode   = $ENV{MESSAGEBEE_TEST_MODE};
@@ -170,15 +170,16 @@ sub before_send_messages {
             my $dt = dt_from_string();
             $dt->subtract(days => 30);
             my $age_threshold = $dt->datetime;
+            my $dirh;
             try {
-                opendir my $dir, $archive_dir or die "Cannot open directory: $!";
+                opendir $dirh, $archive_dir or die "Cannot open directory: $!";
             } catch {
                 $info->{error_message} = $_;
                 logaction('MESSAGEBEE', 'CREATE_DIR_FAILED', undef, JSON->new->pretty->encode($info), 'cron');
                 die "Cannot open directory $archive_dir: $_";
             };
-            my @files = readdir $dir;
-            closedir $dir;
+            my @files = readdir $dirh;
+            closedir $dirh;
 
             foreach my $f (@files) {
                 next unless $f =~ /log|json$/;
@@ -506,13 +507,8 @@ sub before_send_messages {
         }
     }
 
+    logaction('MESSAGEBEE', 'DONE', undef, undef, 'cron');
     logaction('MESSAGEBEE', 'MESSAGES_PROCESSED', undef, JSON->new->pretty->encode($info), 'cron');
-
-    logaction(
-        'CRONJOBS', 'End',
-        'MessageBee::before_send_messages',
-        encode_json({pid => $$, filename => $filename, results => $results})
-    );
 }
 
 sub scrub_biblio {
