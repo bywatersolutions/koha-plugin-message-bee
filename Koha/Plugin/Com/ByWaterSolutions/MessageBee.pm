@@ -217,6 +217,7 @@ sub before_send_messages {
     $other_params->{rows} = $params->{limit} if $params->{limit};
     INFO("OTHER PARAMETERS: " . Data::Dumper::Dumper($search_params));
     $info->{other_params} = $other_params;
+    $info->{total_messages_count} = 0;
 
     my $results = {sent => 0, failed => 0};
     my @message_data;
@@ -227,6 +228,8 @@ sub before_send_messages {
         my @messages = Koha::Notice::Messages->search($search_params, $other_params)->as_list;
         INFO("FOUND " . scalar @messages . " MESSAGES TO PROCESS");
         last unless scalar @messages;
+
+        $info->{total_messages_count} += scalar @messages;
 
         unless ($test_mode) {
             foreach my $m (@messages) {
