@@ -197,17 +197,15 @@ sub before_send_messages {
 
     my $search_params = {status => 'pending', content => {-like => '%messagebee: yes%'},};
 
-    if ($params->{type}) {
-        if ($params->{type} eq 'messagebee') {
+    # 22.11.00, 22.05.8, 21.11.14 +, bug 27265
+    $search_params->{message_transport_type} = $params->{type} if ref($params->{type}) eq 'ARRAY' && scalar @{$params->{type}};
+    # Older versions of Koha
+    $search_params->{message_transport_type} = $params->{type} if ref($params->{type}) eq q{} && $params->{type} && $params->{type} ne 'messagebee';
 
-            # Do nothing, process all messagebee messages, but Koha will not do any processing itself
-        } else {
-            $search_params->{message_transport_type} = $params->{type};
-        }
-    }
-    if ($params->{letter_code}) {
-        $search_params->{letter_code} = $params->{letter_code};
-    }
+    # 22.11.00, 22.05.8, 21.11.14 +, bug 27265
+    $search_params->{letter_code} = $params->{letter_code} if ref($params->{letter_code}) eq 'ARRAY' && scalar @{$params->{letter_code}};
+    # Older versions of Koha
+    $search_params->{letter_code} = $params->{letter_code} if ref($params->{letter_code}) eq q{} && $params->{letter_code};
 
     say "MSGBEE - SEARCH PARAMETERS: " . Data::Dumper::Dumper($search_params) if $verbose;
     INFO("SEARCH PARAMETERS: " . Data::Dumper::Dumper($search_params));
@@ -215,7 +213,8 @@ sub before_send_messages {
 
     my $other_params = {};
     $other_params->{rows} = $params->{limit} if $params->{limit};
-    INFO("OTHER PARAMETERS: " . Data::Dumper::Dumper($search_params));
+    say "OTHER PARAMETERS: " . Data::Dumper::Dumper($other_params);
+    INFO("OTHER PARAMETERS: " . Data::Dumper::Dumper($other_params));
     $info->{other_params} = $other_params;
     $info->{total_messages_count} = 0;
 
