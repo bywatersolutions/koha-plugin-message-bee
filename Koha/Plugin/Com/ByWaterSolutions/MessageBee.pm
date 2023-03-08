@@ -140,6 +140,11 @@ sub before_send_messages {
 
     logaction('MESSAGEBEE', 'STARTED', undef, undef, 'cron');
 
+    if (ref($params->{type}) eq 'ARRAY' && grep(/^skip_messagebee$/, @{$params->{type}})) {
+        logaction('MESSAGEBEE', 'SKIPPED', undef, undef, 'cron');
+        return;
+    }
+
     my $archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH};
     my $test_mode   = $ENV{MESSAGEBEE_TEST_MODE};
     my $verbose     = $ENV{MESSAGEBEE_VERBOSE} || $params->{verbose};
