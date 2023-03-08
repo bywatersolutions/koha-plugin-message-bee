@@ -474,38 +474,36 @@ sub before_send_messages {
         }
     }
 
-    if (@message_data) {
-        my $dev_version = '{' . 'VERSION' . '}';                                         # Prevents substitution
-        my $v           = $VERSION eq $dev_version ? "DEVELOPMENT VERSION" : $VERSION;
-        my $json
-            = encode_json({json_structure_version => '3', messagebee_plugin_version => $v, messages => \@message_data});
+    my $dev_version = '{' . 'VERSION' . '}';                                         # Prevents substitution
+    my $v           = $VERSION eq $dev_version ? "DEVELOPMENT VERSION" : $VERSION;
+    my $json
+        = encode_json({json_structure_version => '3', messagebee_plugin_version => $v, messages => \@message_data});
 
-        if ($archive_dir) {
-            my $archive_path = $archive_dir . "/$filename";
-            write_file($archive_path, $json);
-            say "MSGBEE - FILE WRITTEN TO $archive_path";
-            INFO("MSGBEE - FILE WRITTEN TO $archive_path");
-        }
+    if ($archive_dir) {
+        my $archive_path = $archive_dir . "/$filename";
+        write_file($archive_path, $json);
+        say "MSGBEE - FILE WRITTEN TO $archive_path";
+        INFO("MSGBEE - FILE WRITTEN TO $archive_path");
+    }
 
-        unless ($test_mode) {
-            write_file($realpath, $json);
-            say "MSGBEE - FILE WRITTEN TO $realpath";
-            INFO("MSGBEE - FILE WRITTEN TO $realpath");
+    unless ($test_mode) {
+        write_file($realpath, $json);
+        say "MSGBEE - FILE WRITTEN TO $realpath";
+        INFO("MSGBEE - FILE WRITTEN TO $realpath");
 
-            my $host      = $self->retrieve_data('host');
-            my $username  = $self->retrieve_data('username');
-            my $password  = $self->retrieve_data('password');
-            my $directory = $ENV{MESSAGEBEE_SFTP_DIR} || 'cust2unique';
+        my $host      = $self->retrieve_data('host');
+        my $username  = $self->retrieve_data('username');
+        my $password  = $self->retrieve_data('password');
+        my $directory = $ENV{MESSAGEBEE_SFTP_DIR} || 'cust2unique';
 
-            my $sftp = Net::SFTP::Foreign->new(host => $host, user => $username, port => 22, password => $password);
+        my $sftp = Net::SFTP::Foreign->new(host => $host, user => $username, port => 22, password => $password);
 
-            try {
-                $sftp->die_on_error("Unable to establish SFTP connection");
-                $sftp->setcwd($directory)        or die "unable to change cwd: " . $sftp->error;
-                $sftp->put($realpath, $filename) or die "put failed: " . $sftp->error;
-            } catch {
-                $info->{sftp_error_message} = $_;
-            }
+        try {
+            $sftp->die_on_error("Unable to establish SFTP connection");
+            $sftp->setcwd($directory)        or die "unable to change cwd: " . $sftp->error;
+            $sftp->put($realpath, $filename) or die "put failed: " . $sftp->error;
+        } catch {
+            $info->{sftp_error_message} = $_;
         }
     }
 
