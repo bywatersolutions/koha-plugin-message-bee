@@ -6,7 +6,7 @@ NOTE: This plugin requires the patches for Koha community bug 29100
 
 # Downloading
 
-From the [release page](https://github.com/bywatersolutions/koha-plugin-email-footer/releases) you can download the latest release in `kpz` format.
+From the [release page](https://github.com/bywatersolutions/koha-plugin-message-bee/releases) you can download the latest release in `kpz` format.
 
 # Installation
 
