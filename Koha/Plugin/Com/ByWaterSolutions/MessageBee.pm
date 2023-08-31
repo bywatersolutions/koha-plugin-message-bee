@@ -367,7 +367,7 @@ sub before_send_messages {
 
                         my $subdata;
                         $subdata->{holds}          = [$hold->unblessed];
-                        $subdata->{pickup_library} = $hold->branch->unblessed;
+                        $subdata->{pickup_library} = Koha::Libraries->find($hold->branchcode);
                         $subdata->{biblio}         = $self->scrub_biblio($biblio->unblessed);
                         $subdata->{biblioitem}     = $biblioitem->unblessed;
 
