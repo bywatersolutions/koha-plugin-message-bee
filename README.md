@@ -104,14 +104,14 @@ PREDUE:
 ```
 ---
 messagebee: yes
-checkout: [% issue.issue_id %]
+checkout: [% checkout.issue_id %]
 ```
 
 PREDUEDGST:
 ```
 ---
 messagebee: yes
-checkouts: [% FOREACH i IN issues %][% i.issue_id %],[% END %]
+checkouts: [% FOREACH c IN checkouts %][% c.issue_id %],[% END %]
 ```
 
 DUE:
