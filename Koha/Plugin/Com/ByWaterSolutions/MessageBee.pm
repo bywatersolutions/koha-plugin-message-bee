@@ -271,6 +271,13 @@ sub before_send_messages {
 
                     $messages_seen->{$m->message_id} = 1;
 
+                    try {
+                        $patron         //= Koha::Patrons->find($yaml->{patron})    if $yaml->{patron};
+                        $data->{patron} //= $self->scrub_patron($patron->unblessed) if $patron;
+                    } catch {
+                        say "MSGBEE - Fetching patron failed - $_";
+                    };
+
                     my $data;
                     $data->{message} = $self->scrub_message($m->unblessed);
 
@@ -411,13 +418,6 @@ sub before_send_messages {
                         $data->{library} ||= Koha::Libraries->find($yaml->{library})->unblessed if $yaml->{library};
                     } catch {
                         say "MSGBEE - Fetching library failed - $_";
-                    };
-
-                    try {
-                        $patron         //= Koha::Patrons->find($yaml->{patron})    if $yaml->{patron};
-                        $data->{patron} //= $self->scrub_patron($patron->unblessed) if $patron;
-                    } catch {
-                        say "MSGBEE - Fetching patron failed - $_";
                     };
 
                     try {
