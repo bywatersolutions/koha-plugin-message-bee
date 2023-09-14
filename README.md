@@ -88,6 +88,7 @@ HOLD_CANCELLATION:
 messagebee: yes
 old_hold: [% hold.id %]
 library: [% branch.id %]
+patron: [% borrower.id %]
 ```
 
 CANCEL_HOLD_ON_LOST:
@@ -96,6 +97,7 @@ CANCEL_HOLD_ON_LOST:
 messagebee: yes
 old_hold: [% hold.id %]
 library: [% branch.id %]
+patron: [% borrower.id %]
 ```
 
 NOTE: Predue notices require Koha bug 29100.
