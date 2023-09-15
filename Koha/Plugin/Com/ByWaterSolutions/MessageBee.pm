@@ -271,6 +271,10 @@ sub before_send_messages {
 
                     $messages_seen->{$m->message_id} = 1;
 
+                    my $data;
+                    $data->{message} = $self->scrub_message($m->unblessed);
+
+                    # Handle patron key first in case old checkouts or holds have been anonymized
                     try {
                         $patron         //= Koha::Patrons->find($yaml->{patron})    if $yaml->{patron};
                         $data->{patron} //= $self->scrub_patron($patron->unblessed) if $patron;
@@ -278,8 +282,6 @@ sub before_send_messages {
                         say "MSGBEE - Fetching patron failed - $_";
                     };
 
-                    my $data;
-                    $data->{message} = $self->scrub_message($m->unblessed);
 
                     ## Handle 'checkout' / 'old_checkout'
                     my $checkout;
