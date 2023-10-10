@@ -106,6 +106,7 @@ PREDUE:
 ```
 ---
 messagebee: yes
+patron: [% borrower.id %]
 checkout: [% checkout.issue_id %]
 ```
 
@@ -113,6 +114,7 @@ PREDUEDGST:
 ```
 ---
 messagebee: yes
+patron: [% borrower.id %]
 checkouts: [% FOREACH c IN checkouts %][% c.issue_id %],[% END %]
 ```
 
