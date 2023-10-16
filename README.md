@@ -122,14 +122,14 @@ DUE:
 ```
 ---
 messagebee: yes
-checkout: [% issue.issue_id %]
+checkout: [% checkout.issue_id %]
 ```
 
 DUEDGST:
 ```
 ---
 messagebee: yes
-checkouts: [% FOREACH i IN issues %][% i.issue_id %],[% END %]
+checkouts: [% FOREACH c IN checkouts %][% c.issue_id %],[% END %]
 ```
 
 AUTO_RENEWALS:
