@@ -203,7 +203,7 @@ sub before_send_messages {
     my $search_params = {status => 'pending', content => {-like => '%messagebee: yes%'},};
 
     # 22.11.00, 22.05.8, 21.11.14 +, bug 27265
-    $search_params->{message_transport_type} = $params->{type} if ref($params->{type}) eq 'ARRAY' && scalar @{$params->{type}};
+    $search_params->{message_transport_type} = $params->{type} if ref($params->{type}) eq 'ARRAY' && scalar @{$params->{type}} && $params->{type}->[0] ne 'messagebee';
     # Older versions of Koha
     $search_params->{message_transport_type} = $params->{type} if ref($params->{type}) eq q{} && $params->{type} && $params->{type} ne 'messagebee';
 
