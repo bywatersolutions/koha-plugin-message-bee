@@ -40,6 +40,10 @@ our $metadata = {
     description     => 'Plugin to forward messages to MessageBee for processing and sending',
 };
 
+our $instance = C4::Context->config( 'database' );
+$instance =~ s/koha_//;
+our $default_archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH} || "/var/lib/koha/$instance/gentlenudge_archive";
+
 =head3 new
 
 =cut
@@ -72,15 +76,19 @@ sub configure {
 
         ## Grab the values we already have for our settings, if any exist
         $template->param(
-            host     => $self->retrieve_data('host'),
-            username => $self->retrieve_data('username'),
-            password => $self->retrieve_data('password'),
+            host        => $self->retrieve_data('host'),
+            username    => $self->retrieve_data('username'),
+            password    => $self->retrieve_data('password'),
+            archive_dir => $self->retrieve_data('archive_dir') || $default_archive_dir,
         );
 
         $self->output_html($template->output());
     } else {
         $self->store_data({
-            host => $cgi->param('host'), username => $cgi->param('username'), password => $cgi->param('password'),
+            host        => $cgi->param('host'),
+            username    => $cgi->param('username'),
+            password    => $cgi->param('password'),
+            archive_dir => $cgi->param('archive_dir'),
         });
         $self->go_home();
     }
@@ -145,7 +153,6 @@ sub before_send_messages {
         return;
     }
 
-    my $archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH};
     my $test_mode   = $ENV{MESSAGEBEE_TEST_MODE};
     my $verbose     = $ENV{MESSAGEBEE_VERBOSE} || $params->{verbose};
 
@@ -156,6 +163,7 @@ sub before_send_messages {
     my $filename = "$ts-Notices-$library_name.json";
     my $realpath = "$dir/$filename";
 
+    my $archive_dir = $self->retrieve_data('archive_dir') || $default_archive_dir;
     my $info = {
         archive_dir  => $archive_dir,
         test_mode    => $test_mode,
@@ -237,7 +245,12 @@ sub before_send_messages {
 
         unless ($test_mode) {
             foreach my $m (@messages) {
-                $m->status('deleted')->update();
+                $m->update(
+                    { 
+                        status       => 'deleted', 
+                        failure_code => 'SentViaMessageBee',
+                    }
+                );
             }
         }
 
@@ -450,7 +463,7 @@ sub before_send_messages {
 
 
                     if (keys %$data) {
-                        $m->status('sent')->update() unless $test_mode;
+                        $m->update( { status => 'sent' } ) unless $test_mode;
                         $messages_generated++;
                         push(@message_data, $data);
                         say "MSGBEE - MESSAGE DATA: " . Data::Dumper::Dumper($data) if $verbose > 1;
@@ -458,9 +471,7 @@ sub before_send_messages {
                         INFO("MESSAGE ${\($m->id)} SENT");
                         $info->{results}->{sent}->{successful}++;
                     } else {
-                        $m->status('failed');
-                        $m->failure_code("NO DATA");
-                        $m->update() unless $test_mode;
+                        $m->update({ status => 'failed', failure_code => 'NO DATA' }) unless $test_mode;
                         $results->{failed}++;
                         $info->{results}->{sent}->{failed}++;
                         INFO("MESSAGE ${\($m->id)} FAILED");

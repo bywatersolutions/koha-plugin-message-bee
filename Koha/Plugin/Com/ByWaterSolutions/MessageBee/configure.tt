@@ -31,6 +31,11 @@
         <input type="password" name="password" class="form-control" value="[% password %]">
       </div>
 
+      <div class="form-group">
+        <label for="archive_dir">Archive</label>
+        <input type="archive_dir" name="archive_dir" class="form-control" value="[% archive_dir %]">
+      </div>
+
       <button type="submit" class="btn btn-default">Submit</button>
     </form>
 
