@@ -40,7 +40,7 @@ our $metadata = {
     description     => 'Plugin to forward messages to MessageBee for processing and sending',
 };
 
-our $instance = C4::Context->config( 'database' );
+our $instance = C4::Context->config('database');
 $instance =~ s/koha_//;
 our $default_archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH} || "/var/lib/koha/$instance/gentlenudge_archive";
 
@@ -153,8 +153,8 @@ sub before_send_messages {
         return;
     }
 
-    my $test_mode   = $ENV{MESSAGEBEE_TEST_MODE};
-    my $verbose     = $ENV{MESSAGEBEE_VERBOSE} || $params->{verbose};
+    my $test_mode = $ENV{MESSAGEBEE_TEST_MODE};
+    my $verbose   = $ENV{MESSAGEBEE_VERBOSE} || $params->{verbose};
 
     my $library_name = C4::Context->preference('LibraryName');
     $library_name =~ s/ /_/g;
@@ -164,7 +164,7 @@ sub before_send_messages {
     my $realpath = "$dir/$filename";
 
     my $archive_dir = $self->retrieve_data('archive_dir') || $default_archive_dir;
-    my $info = {
+    my $info        = {
         archive_dir  => $archive_dir,
         test_mode    => $test_mode,
         library_name => $library_name,
@@ -211,14 +211,20 @@ sub before_send_messages {
     my $search_params = {status => 'pending', content => {-like => '%messagebee: yes%'},};
 
     # 22.11.00, 22.05.8, 21.11.14 +, bug 27265
-    $search_params->{message_transport_type} = $params->{type} if ref($params->{type}) eq 'ARRAY' && scalar @{$params->{type}} && $params->{type}->[0] ne 'messagebee';
+    $search_params->{message_transport_type} = $params->{type}
+        if ref($params->{type}) eq 'ARRAY' && scalar @{$params->{type}} && $params->{type}->[0] ne 'messagebee';
+
     # Older versions of Koha
-    $search_params->{message_transport_type} = $params->{type} if ref($params->{type}) eq q{} && $params->{type} && $params->{type} ne 'messagebee';
+    $search_params->{message_transport_type} = $params->{type}
+        if ref($params->{type}) eq q{} && $params->{type} && $params->{type} ne 'messagebee';
 
     # 22.11.00, 22.05.8, 21.11.14 +, bug 27265
-    $search_params->{letter_code} = $params->{letter_code} if ref($params->{letter_code}) eq 'ARRAY' && scalar @{$params->{letter_code}};
+    $search_params->{letter_code} = $params->{letter_code}
+        if ref($params->{letter_code}) eq 'ARRAY' && scalar @{$params->{letter_code}};
+
     # Older versions of Koha
-    $search_params->{letter_code} = $params->{letter_code} if ref($params->{letter_code}) eq q{} && $params->{letter_code};
+    $search_params->{letter_code} = $params->{letter_code}
+        if ref($params->{letter_code}) eq q{} && $params->{letter_code};
 
     say "MSGBEE - SEARCH PARAMETERS: " . Data::Dumper::Dumper($search_params) if $verbose;
     INFO("SEARCH PARAMETERS: " . Data::Dumper::Dumper($search_params));
@@ -228,7 +234,7 @@ sub before_send_messages {
     $other_params->{rows} = $params->{limit} if $params->{limit};
     say "OTHER PARAMETERS: " . Data::Dumper::Dumper($other_params);
     INFO("OTHER PARAMETERS: " . Data::Dumper::Dumper($other_params));
-    $info->{other_params} = $other_params;
+    $info->{other_params}         = $other_params;
     $info->{total_messages_count} = 0;
 
     my $results = {sent => 0, failed => 0};
@@ -245,12 +251,7 @@ sub before_send_messages {
 
         unless ($test_mode) {
             foreach my $m (@messages) {
-                $m->update(
-                    { 
-                        status       => 'deleted', 
-                        failure_code => 'SentViaMessageBee',
-                    }
-                );
+                $m->update({status => 'deleted', failure_code => 'SentViaMessageBee',});
             }
         }
 
@@ -463,7 +464,7 @@ sub before_send_messages {
 
 
                     if (keys %$data) {
-                        $m->update( { status => 'sent' } ) unless $test_mode;
+                        $m->update({status => 'sent'}) unless $test_mode;
                         $messages_generated++;
                         push(@message_data, $data);
                         say "MSGBEE - MESSAGE DATA: " . Data::Dumper::Dumper($data) if $verbose > 1;
@@ -471,7 +472,7 @@ sub before_send_messages {
                         INFO("MESSAGE ${\($m->id)} SENT");
                         $info->{results}->{sent}->{successful}++;
                     } else {
-                        $m->update({ status => 'failed', failure_code => 'NO DATA' }) unless $test_mode;
+                        $m->update({status => 'failed', failure_code => 'NO DATA'}) unless $test_mode;
                         $results->{failed}++;
                         $info->{results}->{sent}->{failed}++;
                         INFO("MESSAGE ${\($m->id)} FAILED");
@@ -525,7 +526,7 @@ sub before_send_messages {
         }
     }
 
-    logaction('MESSAGEBEE', 'DONE', undef, undef, 'cron');
+    logaction('MESSAGEBEE', 'DONE',               undef, undef,                            'cron');
     logaction('MESSAGEBEE', 'MESSAGES_PROCESSED', undef, JSON->new->pretty->encode($info), 'cron');
 }
 
