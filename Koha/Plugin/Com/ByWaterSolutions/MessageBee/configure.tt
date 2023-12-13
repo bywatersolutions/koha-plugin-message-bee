@@ -36,6 +36,15 @@
         <input type="archive_dir" name="archive_dir" class="form-control" value="[% archive_dir %]">
       </div>
 
+      <div class="form-group">
+        <div class="checkbox">
+          <label>
+            <input type="checkbox" name="skip_odue_if_other_if_sms_or_email" value="1" [% IF skip_odue_if_other_if_sms_or_email %]checked="checked"[% END %]>
+            Do not call patrons for overdues if they have a valid sms alert number or email address.
+          </label>
+        </div>
+      </div>
+
       <button type="submit" class="btn btn-default">Submit</button>
     </form>
 

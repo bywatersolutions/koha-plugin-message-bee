@@ -17,6 +17,7 @@ use DateTime;
 use File::Path qw(make_path);
 use File::Slurp qw(write_file);
 use File::Temp qw(tempdir);
+use List::Util qw(first);
 use Log::Log4perl qw(:easy);
 use Log::Log4perl;
 use Mojo::JSON qw(encode_json decode_json);
@@ -76,19 +77,21 @@ sub configure {
 
         ## Grab the values we already have for our settings, if any exist
         $template->param(
-            host        => $self->retrieve_data('host'),
-            username    => $self->retrieve_data('username'),
-            password    => $self->retrieve_data('password'),
-            archive_dir => $self->retrieve_data('archive_dir') || $default_archive_dir,
+            host                               => $self->retrieve_data('host'),
+            username                           => $self->retrieve_data('username'),
+            password                           => $self->retrieve_data('password'),
+            archive_dir                        => $self->retrieve_data('archive_dir') || $default_archive_dir,
+            skip_odue_if_other_if_sms_or_email => $self->retrieve_data('skip_odue_if_other_if_sms_or_email'),
         );
 
         $self->output_html($template->output());
     } else {
         $self->store_data({
-            host        => $cgi->param('host'),
-            username    => $cgi->param('username'),
-            password    => $cgi->param('password'),
-            archive_dir => $cgi->param('archive_dir'),
+            host                               => $cgi->param('host'),
+            username                           => $cgi->param('username'),
+            password                           => $cgi->param('password'),
+            archive_dir                        => $cgi->param('archive_dir'),
+            skip_odue_if_other_if_sms_or_email => $cgi->param('skip_odue_if_other_if_sms_or_email'),
         });
         $self->go_home();
     }
@@ -242,6 +245,13 @@ sub before_send_messages {
     my $messages_seen      = {};
     my $messages_generated = 0;
 
+    my $skip_odue_if_other_if_sms_or_email = $self->retrieve_data('skip_odue_if_other_if_sms_or_email');
+    my $dbh = C4::Context->dbh;
+    my $letter1 = $dbh->selectcol_arrayref(q{SELECT DISTINCT(letter1) FROM overduerules});
+    my $letter2 = $dbh->selectcol_arrayref(q{SELECT DISTINCT(letter2) FROM overduerules});
+    my $letter3 = $dbh->selectcol_arrayref(q{SELECT DISTINCT(letter3) FROM overduerules});
+    my @odue_letter_codes = ( @$letter1, @$letter2, @$letter3 );
+
     while (1) {
         my @messages = Koha::Notice::Messages->search($search_params, $other_params)->as_list;
         INFO("FOUND " . scalar @messages . " MESSAGES TO PROCESS");
@@ -306,7 +316,7 @@ sub before_send_messages {
                         $checkout = Koha::Old::Checkouts->find($yaml->{old_checkout});
                     }
                     if ($checkout) {
-                        $patron          = $checkout->patron;
+                        $patron          //= $checkout->patron;
                         $data->{patron}  = $self->scrub_patron($patron->unblessed);
                         $data->{library} = $checkout->library->unblessed;
 
@@ -462,6 +472,16 @@ sub before_send_messages {
                         say "MSGBEE - Fetching patron account balance failed - $_";
                     };
 
+                    # If enabled, skip sending if this is an overdue notice *and* the patron has an sms number or email address
+                    if (if $skip_odue_if_other_if_sms_or_email && any { $m->{letter_code} eq $_ } @odue_letter_codes) {
+                        my $skip = $patron->notice_email_address || $patron->smsalertnumber;
+
+                        if ($skip) {
+                            $m->status('deleted');    # As close a status to 'skipped' as we have
+                            $m->update();
+                            next;
+                        }
+                    }
 
                     if (keys %$data) {
                         $m->update({status => 'sent'}) unless $test_mode;
