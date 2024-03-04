@@ -287,6 +287,7 @@ sub before_send_messages {
                 };
 
                 foreach my $yaml (@yaml) {
+                  try {
 
                     next unless $yaml;
                     next unless ref $yaml eq 'HASH';
@@ -498,8 +499,16 @@ sub before_send_messages {
                         $info->{results}->{sent}->{failed}++;
                         INFO("MESSAGE ${\($m->id)} FAILED");
                     }
-                }
-
+                } catch {
+                    say "MSGBEE - ERROR - Processing Message ${\( $m->id )} Failed - $_";
+                    ERROR("Processing Message ${\( $m->id )} Failed - $_");
+                    $m->status('failed');
+                    $m->failure_code("ERROR: $_");
+                    $m->update() unless $test_mode;
+                    $info->{results}->{sent}->{failed}++;
+                    $results->{failed}++;
+                };
+              }
             } catch {
                 say "MSGBEE - ERROR - Processing Message ${\( $m->id )} Failed - $_";
                 ERROR("Processing Message ${\( $m->id )} Failed - $_");
