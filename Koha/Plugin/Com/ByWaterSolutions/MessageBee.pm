@@ -336,80 +336,75 @@ sub before_send_messages {
                         my @checkouts = split(/,/, $yaml->{checkouts});
 
                         foreach my $id (@checkouts) {
-                            my $checkout = Koha::Checkouts->find($id);
-                            next unless $checkout;
+                            try {
+                                my $checkout = Koha::Checkouts->find($id);
 
-                            $patron //= $checkout->patron;
-                            $data->{patron} //= $self->scrub_patron($patron->unblessed);
+                                $patron //= $checkout->patron;
+                                $data->{patron} //= $self->scrub_patron($patron->unblessed);
 
-                            my $subdata;
-                            my $item = $checkout->item;
-                            $subdata->{checkout}   = $checkout->unblessed;
-                            $subdata->{library}    = $checkout->library->unblessed;
-                            $subdata->{item}       = $item->unblessed;
-                            $subdata->{biblio}     = $self->scrub_biblio($item->biblio->unblessed);
-                            $subdata->{biblioitem} = $item->biblioitem->unblessed;
-                            $subdata->{itemtype}   = $item->itemtype->unblessed;
+                                my $subdata;
+                                my $item = $checkout->item;
+                                $subdata->{checkout}   = $checkout->unblessed;
+                                $subdata->{library}    = $checkout->library->unblessed;
+                                $subdata->{item}       = $item->unblessed;
+                                $subdata->{biblio}     = $self->scrub_biblio($item->biblio->unblessed);
+                                $subdata->{biblioitem} = $item->biblioitem->unblessed;
+                                $subdata->{itemtype}   = $item->itemtype->unblessed;
 
-                            $data->{checkouts} //= [];
-                            push(@{$data->{checkouts}}, $subdata);
+                                $data->{checkouts} //= [];
+                                push(@{$data->{checkouts}}, $subdata);
+                            };
                         }
                     }
 
                     ## Handle 'hold'
                     if ($yaml->{hold}) {
-                        my $hold = Koha::Holds->find($yaml->{hold});
-                        next unless $hold;
+                        try {
+                            my $hold = Koha::Holds->find($yaml->{hold});
+                            my $biblio = $hold->biblio;
+                            my $biblioitem = $biblio->biblioitem;
 
-                        my $biblio = $hold->biblio;
-                        next unless $biblio;
+                            $patron //= $hold->patron;
+                            $data->{patron} //= $self->scrub_patron($patron->unblessed);
 
-                        my $biblioitem = $biblio->biblioitem;
-                        next unless $biblioitem;
+                            my $subdata;
+                            $subdata->{hold}           = $hold->unblessed;
+                            $subdata->{pickup_library} = $hold->branch->unblessed;
+                            $subdata->{biblio}         = $self->scrub_biblio($biblio->unblessed);
+                            $subdata->{biblioitem}     = $biblioitem->unblessed;
 
-                        $patron //= $hold->patron;
-                        $data->{patron} //= $self->scrub_patron($patron->unblessed);
+                            if (my $item = $hold->item) {
+                                $subdata->{item}     = $item->unblessed;
+                                $subdata->{itemtype} = $item->itemtype->unblessed;
+                            }
 
-                        my $subdata;
-                        $subdata->{hold}           = $hold->unblessed;
-                        $subdata->{pickup_library} = $hold->branch->unblessed;
-                        $subdata->{biblio}         = $self->scrub_biblio($biblio->unblessed);
-                        $subdata->{biblioitem}     = $biblioitem->unblessed;
-
-                        if (my $item = $hold->item) {
-                            $subdata->{item}     = $item->unblessed;
-                            $subdata->{itemtype} = $item->itemtype->unblessed;
-                        }
-
-                        $data->{holds} = [$subdata];
+                            $data->{holds} = [$subdata];
+                        };
                     }
 
                     ## Handle 'old_hold'
                     if ($yaml->{old_hold}) {
-                        my $hold = Koha::Old::Holds->find($yaml->{old_hold});
-                        next unless $hold;
+                        try {
+                            my $hold = Koha::Old::Holds->find($yaml->{old_hold});
+                            my $biblio = Koha::Biblios->find($hold->biblionumber);
+                            my $biblioitem = $biblio->biblioitem;
 
-                        my $biblio = Koha::Biblios->find($hold->biblionumber);
-                        next unless $biblio;
+                            $patron //= $hold->patron;
+                            $data->{patron} //= $self->scrub_patron($patron->unblessed);
 
-                        my $biblioitem = $biblio->biblioitem;
-                        next unless $biblioitem;
+                            my $subdata;
+                            $subdata->{holds}          = [$hold->unblessed];
+                            $subdata->{pickup_library} = Koha::Libraries->find($hold->branchcode);
+                            $subdata->{biblio}         = $self->scrub_biblio($biblio->unblessed);
+                            $subdata->{biblioitem}     = $biblioitem->unblessed;
 
-                        $patron //= $hold->patron;
-                        $data->{patron} //= $self->scrub_patron($patron->unblessed);
+                            if (my $item = $hold->item) {
+                                $subdata->{item}     = $item->unblessed;
+                                $subdata->{itemtype} = $item->itemtype->unblessed;
+                            }
 
-                        my $subdata;
-                        $subdata->{holds}          = [$hold->unblessed];
-                        $subdata->{pickup_library} = Koha::Libraries->find($hold->branchcode);
-                        $subdata->{biblio}         = $self->scrub_biblio($biblio->unblessed);
-                        $subdata->{biblioitem}     = $biblioitem->unblessed;
-
-                        if (my $item = $hold->item) {
-                            $subdata->{item}     = $item->unblessed;
-                            $subdata->{itemtype} = $item->itemtype->unblessed;
-                        }
-
-                        $data->{holds} = [$subdata];
+                            $data->{holds} = [$subdata];
+                        };
                     }
 
                     ## Handle 'holds'
@@ -478,6 +473,7 @@ sub before_send_messages {
 
                         if ($skip) {
                             $m->status('deleted');    # As close a status to 'skipped' as we have
+                            $m->failure_code('Patron already recieved a "hold ready for pickup" in this notice batch.');
                             $m->update();
                             next;
                         }
