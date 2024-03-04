@@ -478,6 +478,7 @@ sub before_send_messages {
 
                         if ($skip) {
                             $m->status('deleted');    # As close a status to 'skipped' as we have
+                            $m->failure_code('Patron already recieved a "hold ready for pickup" in this notice batch.');
                             $m->update();
                             next;
                         }
