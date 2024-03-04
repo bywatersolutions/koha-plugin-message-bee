@@ -359,13 +359,13 @@ sub before_send_messages {
                     ## Handle 'hold'
                     if ($yaml->{hold}) {
                         my $hold = Koha::Holds->find($yaml->{hold});
-                        next unless $hold;
+                        $m->update({status => 'failed', failure_code => "Hold with id $yaml->{hold} not found"}) && next unless $hold;
 
                         my $biblio = $hold->biblio;
-                        next unless $biblio;
+                        $m->update({status => 'failed', failure_code => "Bib for hold with id $yaml->{hold} not found"}) && next unless $biblio;
 
                         my $biblioitem = $biblio->biblioitem;
-                        next unless $biblioitem;
+                        $m->update({status => 'failed', failure_code => "Bib item for hold with id $yaml->{hold} not found"}) && next unless $biblioitem;
 
                         $patron //= $hold->patron;
                         $data->{patron} //= $self->scrub_patron($patron->unblessed);
@@ -387,13 +387,13 @@ sub before_send_messages {
                     ## Handle 'old_hold'
                     if ($yaml->{old_hold}) {
                         my $hold = Koha::Old::Holds->find($yaml->{old_hold});
-                        next unless $hold;
+                        $m->update({status => 'failed', failure_code => "Hold with id $yaml->{old_hold} not found"}) && next unless $hold;
 
                         my $biblio = Koha::Biblios->find($hold->biblionumber);
-                        next unless $biblio;
+                        $m->update({status => 'failed', failure_code => "Bib for old hold with id $yaml->{old_hold} not found"}) && next unless $biblio;
 
                         my $biblioitem = $biblio->biblioitem;
-                        next unless $biblioitem;
+                        $m->update({status => 'failed', failure_code => "Bib for old hold with id $yaml->{old_hold} not found"}) && next unless $biblio;
 
                         $patron //= $hold->patron;
                         $data->{patron} //= $self->scrub_patron($patron->unblessed);
