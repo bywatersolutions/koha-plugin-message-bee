@@ -10,15 +10,17 @@ From the [release page](https://github.com/bywatersolutions/koha-plugin-message-
 
 # Installation
 
-This plugin requires no special installation. Simply download the kpz file from the releases page, then upload it to Koha from Administration / Plugins.
+This plugin requires no special installation, but will require acceptance of the host key for the UniqueMgmt sftp server as the Koha web user (sudo koha-shell <instance>, ssh <unique's sftp address>, accept host key)
 
 # Configuration
 
-There are a number of envirnment variables that can be set to change the behavior of the MessageBee plugin:
-* MESSAGEBEE_ARCHIVE_PATH - If this is set to a directory, a copy of the file uploaded to UMS will be stored here
+There are a number of environment variables that can be set to change the behavior of the MessageBee plugin:
+* MESSAGEBEE_ARCHIVE_PATH - If this is set to a directory, a copy of the file uploaded to UMS will be stored here. The directory is best created in /var/lib/koha/<instance>/messagebee_archive
 * MESSAGEBEE_TEST_MODE - If MESSAGEBEE_TEST_MODE is set to 1, the JSON file will be generated but messages in the queue will not be updated
 * MESSAGEBEE_VERBOSE - If MESSAGEBEE_VERBOSE is set to 1, the plugin will output extra info when process_message_queue.pl is run
 * MESSAGEBEE_SFTP_DIR - If MESSAGEBEE_SFTP_DIR is set to a path, that path will be used on the remote SFTP server instead of the default `cust2unique`
+
+
 
 # Notice templates
 
