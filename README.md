@@ -75,6 +75,15 @@ messagebee: yes
 hold: [% hold.id %]
 ```
 
+HOLDDGST:
+```
+----
+---
+messagebee: yes
+hold: [% hold.id %]
+----
+```
+
 HOLD_REMINDER:
 ```
 ---
