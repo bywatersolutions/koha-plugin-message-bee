@@ -43,7 +43,7 @@ our $metadata = {
 
 our $instance = C4::Context->config('database');
 $instance =~ s/koha_//;
-our $default_archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH} || "/var/lib/koha/$instance/gentlenudge_archive";
+our $default_archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH} || "/var/lib/koha/$instance/messagebee_archive";
 
 =head3 new
 
