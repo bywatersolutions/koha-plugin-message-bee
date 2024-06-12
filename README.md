@@ -168,3 +168,11 @@ MEMBERSHIP_EXPIRY:
 messagebee: yes
 patron: [% borrower.borrowernumber %]
 ```
+
+WELCOME:
+```
+---
+messagebee: yes
+patron: [% borrower.id %]
+library: [% branch.id %]
+```
