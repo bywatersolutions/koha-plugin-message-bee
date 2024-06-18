@@ -261,7 +261,7 @@ sub before_send_messages {
 
         unless ($test_mode) {
             foreach my $m (@messages) {
-                $m->update({status => 'deleted', failure_code => 'SentViaMessageBee',});
+                $m->update({status => 'deleted'});
             }
         }
 
