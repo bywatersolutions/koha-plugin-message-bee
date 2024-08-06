@@ -17,7 +17,7 @@ use DateTime;
 use File::Path qw(make_path);
 use File::Slurp qw(write_file);
 use File::Temp qw(tempdir);
-use List::Util qw(first);
+use List::Util qw(any);
 use Log::Log4perl qw(:easy);
 use Log::Log4perl;
 use Mojo::JSON qw(encode_json decode_json);
