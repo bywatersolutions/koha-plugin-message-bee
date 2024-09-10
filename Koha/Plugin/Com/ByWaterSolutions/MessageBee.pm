@@ -182,6 +182,10 @@ sub before_send_messages {
     INFO("Running MessageBee before_send_messages hook");
 
     if ($archive_dir) {
+        unless (-d $archive_dir) {
+            make_path $archive_dir or die "Failed to create path: $archive_dir";
+        }
+
         if (-d $archive_dir) {
             my $dt = dt_from_string();
             $dt->subtract(days => 30);
@@ -203,8 +207,6 @@ sub before_send_messages {
                     unlink($archive_dir . "/" . $f);
                 }
             }
-        } else {
-            make_path $archive_dir or die "Failed to create path: $archive_dir";
         }
     }
 
