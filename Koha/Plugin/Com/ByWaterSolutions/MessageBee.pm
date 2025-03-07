@@ -149,10 +149,12 @@ in process_message_queue.pl
 sub before_send_messages {
     my ($self, $params) = @_;
 
-    logaction('MESSAGEBEE', 'STARTED', undef, undef, 'cron');
+    my $is_cronjob = $0 =~ /process_message_queue.pl$/;
+
+    logaction('MESSAGEBEE', 'STARTED', undef, undef, 'cron') if $is_cronjob;
 
     if (ref($params->{type}) eq 'ARRAY' && grep(/^skip_messagebee$/, @{$params->{type}})) {
-        logaction('MESSAGEBEE', 'SKIPPED', undef, undef, 'cron');
+        logaction('MESSAGEBEE', 'SKIPPED', undef, undef, 'cron') if $$is_cronjob;
         return;
     }
 
@@ -177,7 +179,7 @@ sub before_send_messages {
     };
 
     Log::Log4perl->easy_init({level => $DEBUG, file => ">>$archive_dir/$ts-Notices-$library_name.log"});
-    say "MSGBEE - LOG WRITTEN TO $archive_dir/$ts-Notices-$library_name.log";
+    $is_cronjob && say "MSGBEE - LOG WRITTEN TO $archive_dir/$ts-Notices-$library_name.log";
 
     INFO("Running MessageBee before_send_messages hook");
 
@@ -195,7 +197,7 @@ sub before_send_messages {
                 opendir $dirh, $archive_dir or die "Cannot open directory: $!";
             } catch {
                 $info->{error_message} = $_;
-                logaction('MESSAGEBEE', 'CREATE_DIR_FAILED', undef, JSON->new->pretty->encode($info), 'cron');
+                logaction('MESSAGEBEE', 'CREATE_DIR_FAILED', undef, JSON->new->pretty->encode($info), 'cron') if $is_cronjob;
                 die "Cannot open directory $archive_dir: $_";
             };
             my @files = readdir $dirh;
@@ -210,7 +212,7 @@ sub before_send_messages {
         }
     }
 
-    say "MSGBEE - MESSAGE BEE TEST MODE" if $test_mode;
+    $is_cronjob && say "MSGBEE - MESSAGE BEE TEST MODE" if $test_mode;
     INFO("TEST MODE IS ENABLED")         if $test_mode;
 
     my $search_params = {status => 'pending', content => {-like => '%messagebee: yes%'},};
@@ -231,13 +233,13 @@ sub before_send_messages {
     $search_params->{letter_code} = $params->{letter_code}
         if ref($params->{letter_code}) eq q{} && $params->{letter_code};
 
-    say "MSGBEE - SEARCH PARAMETERS: " . Data::Dumper::Dumper($search_params) if $verbose;
+    $is_cronjob && say "MSGBEE - SEARCH PARAMETERS: " . Data::Dumper::Dumper($search_params) if $verbose;
     INFO("SEARCH PARAMETERS: " . Data::Dumper::Dumper($search_params));
     $info->{search_params} = $search_params;
 
     my $other_params = {};
     $other_params->{rows} = $params->{limit} if $params->{limit};
-    say "OTHER PARAMETERS: " . Data::Dumper::Dumper($other_params);
+    $is_cronjob && say "OTHER PARAMETERS: " . Data::Dumper::Dumper($other_params);
     INFO("OTHER PARAMETERS: " . Data::Dumper::Dumper($other_params));
     $info->{other_params}         = $other_params;
     $info->{total_messages_count} = 0;
@@ -271,9 +273,9 @@ sub before_send_messages {
             $info->{results}->{types}->{$m->letter_code}->{$m->message_transport_type}++;
 
             try {
-                say "MSGBEE - WORKING ON MESSAGE " . $m->id if $verbose;
+                $is_cronjob && say "MSGBEE - WORKING ON MESSAGE " . $m->id if $verbose;
                 INFO("WORKING ON MESSAGE " . $m->id);
-                say "MSGBEE - CONTENT:\n" . $m->content if $verbose > 2;
+                $is_cronjob && say "MSGBEE - CONTENT:\n" . $m->content if $verbose > 2;
                 TRACE("MESSAGE CONTENTS: " . Data::Dumper::Dumper($m->unblessed));
                 my $content = $m->content();
 
@@ -283,7 +285,7 @@ sub before_send_messages {
                 try {
                     @yaml = Load $content;
                 } catch {
-                    say "MSGBEE - LOADING YAML FAILED!:\n" . $m->content;
+                    $is_cronjob && say "MSGBEE - LOADING YAML FAILED!:\n" . $m->content;
                     ERROR("MSGBEE - LOADING YAML FAILED!:" . Data::Dumper::Dumper($m->content));
                     @yaml = undef;
                 };
@@ -306,7 +308,7 @@ sub before_send_messages {
                         $patron         //= Koha::Patrons->find($yaml->{patron})    if $yaml->{patron};
                         $data->{patron} //= $self->scrub_patron($patron->unblessed) if $patron;
                     } catch {
-                        say "MSGBEE - Fetching patron failed - $_";
+                        $is_cronjob && say "MSGBEE - Fetching patron failed - $_";
                     };
 
 
@@ -446,33 +448,33 @@ sub before_send_messages {
                     try {
                         $data->{library} ||= Koha::Libraries->find($yaml->{library})->unblessed if $yaml->{library};
                     } catch {
-                        say "MSGBEE - Fetching library failed - $_";
+                        $is_cronjob && say "MSGBEE - Fetching library failed - $_";
                     };
 
                     try {
                         $data->{item} ||= Koha::Items->find($yaml->{item})->unblessed if $yaml->{item};
                     } catch {
-                        say "MSGBEE - Fetching item failed - $_";
+                        $is_cronjob && say "MSGBEE - Fetching item failed - $_";
                     };
 
                     try {
                         $data->{biblio} ||= $self->scrub_biblio(Koha::Biblios->find($yaml->{biblio})->unblessed)
                             if $yaml->{biblio};
                     } catch {
-                        say "MSGBEE - Fetching biblio failed - $_";
+                        $is_cronjob && say "MSGBEE - Fetching biblio failed - $_";
                     };
 
                     try {
                         $data->{biblioitem} ||= Koha::Biblioitems->find($yaml->{biblioitem})->unblessed
                             if $yaml->{biblioitem};
                     } catch {
-                        say "MSGBEE - Fetching biblioitem failed - $_";
+                        $is_cronjob && say "MSGBEE - Fetching biblioitem failed - $_";
                     };
 
                     try {
                         $data->{patron}->{account_balance} = $patron->account->balance if $patron;
                     } catch {
-                        say "MSGBEE - Fetching patron account balance failed - $_";
+                        $is_cronjob && say "MSGBEE - Fetching patron account balance failed - $_";
                     };
 
                     # If enabled, skip sending if this is an overdue notice *and* the patron has an sms number or email address
@@ -491,7 +493,7 @@ sub before_send_messages {
                         $m->update({status => 'sent'}) unless $test_mode;
                         $messages_generated++;
                         push(@message_data, $data);
-                        say "MSGBEE - MESSAGE DATA: " . Data::Dumper::Dumper($data) if $verbose > 1;
+                        $is_cronjob && say "MSGBEE - MESSAGE DATA: " . Data::Dumper::Dumper($data) if $verbose > 1;
                         $results->{sent}++;
                         INFO("MESSAGE ${\($m->id)} SENT");
                         $info->{results}->{sent}->{successful}++;
@@ -502,7 +504,7 @@ sub before_send_messages {
                         INFO("MESSAGE ${\($m->id)} FAILED");
                     }
                 } catch {
-                    say "MSGBEE - ERROR - Processing Message ${\( $m->id )} Failed - $_";
+                    $is_cronjob && say "MSGBEE - ERROR - Processing Message ${\( $m->id )} Failed - $_";
                     ERROR("Processing Message ${\( $m->id )} Failed - $_");
                     $m->status('failed');
                     $m->failure_code("ERROR: $_");
@@ -512,7 +514,7 @@ sub before_send_messages {
                 };
               }
             } catch {
-                say "MSGBEE - ERROR - Processing Message ${\( $m->id )} Failed - $_";
+                $is_cronjob && say "MSGBEE - ERROR - Processing Message ${\( $m->id )} Failed - $_";
                 ERROR("Processing Message ${\( $m->id )} Failed - $_");
                 $m->status('failed');
                 $m->failure_code("ERROR: $_");
@@ -533,13 +535,13 @@ sub before_send_messages {
     if ($archive_dir) {
         my $archive_path = $archive_dir . "/$filename";
         write_file($archive_path, $json);
-        say "MSGBEE - FILE WRITTEN TO $archive_path";
+        $is_cronjob && say "MSGBEE - FILE WRITTEN TO $archive_path";
         INFO("MSGBEE - FILE WRITTEN TO $archive_path");
     }
 
     unless ($test_mode) {
         write_file($realpath, $json);
-        say "MSGBEE - FILE WRITTEN TO $realpath";
+        $is_cronjob && say "MSGBEE - FILE WRITTEN TO $realpath";
         INFO("MSGBEE - FILE WRITTEN TO $realpath");
 
         my $host      = $self->retrieve_data('host');
@@ -558,8 +560,8 @@ sub before_send_messages {
         }
     }
 
-    logaction('MESSAGEBEE', 'DONE',               undef, undef,                            'cron');
-    logaction('MESSAGEBEE', 'MESSAGES_PROCESSED', undef, JSON->new->pretty->encode($info), 'cron');
+    logaction('MESSAGEBEE', 'DONE',               undef, undef,                            'cron') if $is_cronjob;
+    logaction('MESSAGEBEE', 'MESSAGES_PROCESSED', undef, JSON->new->pretty->encode($info), 'cron') if $is_cronjob;
 }
 
 sub scrub_biblio {
