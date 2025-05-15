@@ -15,6 +15,7 @@ use Koha::DateUtils qw(dt_from_string);
 use Data::Dumper;
 use DateTime;
 use File::Path qw(make_path);
+use File::Path qw(make_path);
 use File::Slurp qw(write_file);
 use File::Temp qw(tempdir);
 use List::Util qw(any);
@@ -43,7 +44,17 @@ our $metadata = {
 
 our $instance = C4::Context->config('database');
 $instance =~ s/koha_//;
+
+
 our $default_archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH} || "/var/lib/koha/$instance/messagebee_archive";
+
+unless (-d $default_archive_dir) {
+    make_path($default_archive_dir) or die "Failed to create path '$default_archive_dir': $!";
+    print "Nested directory created: $default_archive_dir\n";
+} else {
+    print "Directory already exists: $default_archive_dir\n";
+}
+
 
 =head3 new
 
