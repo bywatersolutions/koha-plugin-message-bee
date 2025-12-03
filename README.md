@@ -1,180 +1,270 @@
-# MessageBee plugin for Koha
+# Webhook Notifications plugin for Koha
 
-This plugin enables Koha to forward message data to Unqiue's MessageBee service for processing and sending.
+This plugin enables Koha to forward message/notice data to a webhook endpoint for processing and sending via external services.
 
-NOTE: This plugin requires the patches for Koha community bug 29100
+## Features
 
-# Downloading
+- OAuth2 authentication (client credentials flow)
+- Configurable payload format (full enriched data or minimal IDs)
+- Support for all Koha notice types
+- Optional inbound API for asynchronous webhook workflows
+- Archive/logging for debugging
 
-From the [release page](https://github.com/bywatersolutions/koha-plugin-message-bee/releases) you can download the latest release in `kpz` format.
+## Downloading
 
-# Installation
+From the [release page](https://github.com/bywatersolutions/koha-plugin-webhook-notifications/releases) you can download the latest release in `kpz` format.
 
-This plugin requires no special installation, but will require acceptance of the host key for the UniqueMgmt sftp server as the Koha web user (sudo koha-shell <instance>, ssh <unique's sftp address>, accept host key)
+## Installation
 
-# Configuration
+This plugin requires no special installation beyond the standard Koha plugin installation process.
 
-There are a number of environment variables that can be set to change the behavior of the MessageBee plugin:
-* MESSAGEBEE_ARCHIVE_PATH - If this is set to a directory, a copy of the file uploaded to UMS will be stored here. The directory is best created in /var/lib/koha/<instance>/messagebee_archive
-* MESSAGEBEE_TEST_MODE - If MESSAGEBEE_TEST_MODE is set to 1, the JSON file will be generated but messages in the queue will not be updated
-* MESSAGEBEE_VERBOSE - If MESSAGEBEE_VERBOSE is set to 1, the plugin will output extra info when process_message_queue.pl is run
-* MESSAGEBEE_SFTP_DIR - If MESSAGEBEE_SFTP_DIR is set to a path, that path will be used on the remote SFTP server instead of the default `cust2unique`
+## Configuration
 
+### Required Environment Variables
 
+The following environment variables must be set for the plugin to function:
 
-# Notice templates
+| Variable | Description |
+|----------|-------------|
+| `WEBHOOK_AUTH_URL` | OAuth2 token endpoint (e.g., AWS Cognito) |
+| `WEBHOOK_CLIENT_ID` | OAuth2 client ID |
+| `WEBHOOK_CLIENT_SECRET` | OAuth2 client secret |
+| `WEBHOOK_NOTICE_URL` | Webhook endpoint URL for sending notices |
 
-To send a message to MessageBee instead of having Koha process and send the notice locally,
-the message content must be a YAML blob of key/value pairs. The only one that is required
-is `messagebee: yes` which tells the plugin this message is destined for MessageBee.
+### Optional Environment Variables
 
-Other keys you may use are:
-* `biblio` - biblio.biblionumber
-* `biblioitem` - biblioitems.biblioitemnumber
-* `item` - items.itemnumber
-* `library` - branches.branchcode
-* `patron` - borrowers.borrowernumber
-* `checkout` - issues.issue_id, auto-imports patron, library, item, biblio and biblioitem
-* `checkouts` - repeating comma delimited issues.issue_id
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `WEBHOOK_CUSTOMER_ID` | Customer ID sent in the `customer-id` header (required by some APIs) | Not set |
+| `WEBHOOK_ARCHIVE_PATH` | Directory to store copies of sent notifications | `/var/lib/koha/<instance>/webhook_notifications_archive` |
+| `WEBHOOK_TEST_MODE` | Set to `1` to generate JSON without sending or updating message status | Not set |
+| `WEBHOOK_VERBOSE` | Set to `1` for verbose logging output | Not set |
 
-Example notices:
+### Plugin Configuration (Admin UI)
 
-CHECKOUT:
+Additional settings are available in the Koha plugin configuration:
+
+- **Payload Format**: Choose between full enriched data or minimal IDs only
+- **Archive Directory**: Override the default archive path
+- **Skip Overdue Calls**: Option to skip phone calls for overdues if patron has email/SMS
+
+## Authentication Flow
+
+The plugin uses OAuth2 client credentials flow:
+
+1. Plugin requests access token from `WEBHOOK_AUTH_URL` using client credentials
+2. Token is used in `Authorization: Bearer <token>` header for notice requests
+3. Notices are POSTed to `WEBHOOK_NOTICE_URL` with optional `customer-id` header
+
+## Payload Formats
+
+### Full Format (default)
+
+Sends complete enriched data including patron details, item information, bibliographic data, etc.
+
+### Minimal Format
+
+Sends only identifiers, useful when the receiving service will fetch details itself:
+
+```json
+{
+    "notice_type": "HOLD",
+    "transport_type": "email",
+    "message_id": 12345,
+    "patron_id": 67890,
+    "hold_id": 1053025
+}
 ```
-----
+
+## Notice Templates
+
+To send a message via webhook instead of having Koha process and send the notice locally, the message content must be a YAML blob of key/value pairs. The only required key is `webhook: yes`.
+
+### Available Keys
+
+| Key | Description |
+|-----|-------------|
+| `webhook` | Required. Must be `yes` to enable webhook processing |
+| `patron` | borrowers.borrowernumber |
+| `biblio` | biblio.biblionumber |
+| `biblioitem` | biblioitems.biblioitemnumber |
+| `item` | items.itemnumber |
+| `library` | branches.branchcode |
+| `checkout` | issues.issue_id (auto-imports patron, library, item, biblio, biblioitem) |
+| `checkouts` | Comma-delimited list of issues.issue_id |
+| `old_checkout` | old_issues.issue_id (for check-in notices) |
+| `hold` | reserves.reserve_id |
+| `holds` | Comma-delimited list of reserves.reserve_id |
+| `old_hold` | old_reserves.reserve_id (for cancelled holds) |
+
+### Example Notice Templates
+
+**CHECKOUT:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 checkout: [% checkout.id %]
 library: [% branch.id %]
-----
+---
 ```
 
-RENEWAL:
-```
-----
+**RENEWAL:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 checkout: [% checkout.id %]
 library: [% branch.id %]
-----
+---
 ```
 
-CHECKIN:
-```
-----
+**CHECKIN:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 old_checkout: [% old_checkout.issue_id %]
 patron: [% borrower.borrowernumber %]
 library: [% branch.id %]
-----
+---
 ```
 
-HOLD:
-```
+**HOLD:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 hold: [% hold.id %]
+---
 ```
 
-HOLDDGST:
-```
-----
+**HOLDDGST:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 hold: [% hold.id %]
-----
+---
 ```
 
-HOLD_REMINDER:
-```
+**HOLD_REMINDER:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 holds: [% FOREACH h IN holds %][% h.id %],[% END %]
+---
 ```
 
-HOLD_CANCELLATION:
-```
+**HOLD_CANCELLATION:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 old_hold: [% hold.id %]
 library: [% branch.id %]
 patron: [% borrower.id %]
+---
 ```
 
-CANCEL_HOLD_ON_LOST:
-```
+**CANCEL_HOLD_ON_LOST:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 old_hold: [% hold.id %]
 library: [% branch.id %]
 patron: [% borrower.id %]
-```
-
-NOTE: Predue notices require Koha bug 29100.
-
-PREDUE:
-```
 ---
-messagebee: yes
+```
+
+**PREDUE:** (requires Koha bug 29100)
+```yaml
+---
+webhook: yes
 patron: [% borrower.id %]
 checkout: [% checkout.issue_id %]
+---
 ```
 
-PREDUEDGST:
-```
+**PREDUEDGST:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 patron: [% borrower.id %]
 checkouts: [% FOREACH c IN checkouts %][% c.issue_id %],[% END %]
+---
 ```
 
-DUE:
-```
+**DUE:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 checkout: [% checkout.issue_id %]
+---
 ```
 
-DUEDGST:
-```
+**DUEDGST:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 checkouts: [% FOREACH c IN checkouts %][% c.issue_id %],[% END %]
+---
 ```
 
-AUTO_RENEWALS:
-```
+**AUTO_RENEWALS:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 checkout: [% checkout.id %]
+---
 ```
 
-AUTO_RENEWALS_DGST:
-```
+**AUTO_RENEWALS_DGST:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 checkouts: [% FOREACH c IN checkouts %][% c.issue_id %],[% END %]
+---
 ```
 
-OVERDUE NOTICES:
-```
+**OVERDUE NOTICES:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 checkouts: [% FOREACH o IN overdues %][% o.id %],[% END %]
+---
 ```
 
-MEMBERSHIP_EXPIRY:
-```
+**MEMBERSHIP_EXPIRY:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 patron: [% borrower.borrowernumber %]
+---
 ```
 
-WELCOME:
-```
+**WELCOME:**
+```yaml
 ---
-messagebee: yes
+webhook: yes
 patron: [% borrower.id %]
 library: [% branch.id %]
+---
 ```
+
+## Inbound API (Optional)
+
+For asynchronous webhook workflows, the plugin provides API endpoints that external services can call to update message status in Koha:
+
+### Update Message Status
+```
+POST /api/v1/contrib/webhook_notifications/message/{message_id}/status
+Query Parameters:
+  - status (required): 'sent' or 'failed'
+  - subject (optional): Update message subject
+  - content (optional): Update message content
+```
+
+### Update Message Content
+```
+POST /api/v1/contrib/webhook_notifications/message/{message_id}/content
+Query Parameters:
+  - content (required): New message content
+  - subject (optional): New message subject
+```
+
+These endpoints are useful when your webhook service processes messages asynchronously and needs to report delivery status back to Koha.
