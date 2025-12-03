@@ -1,0 +1,113 @@
+[% USE Dumper %]
+[% USE KohaDates %]
+[% INCLUDE 'doc-head-open.inc' %]
+ <title>Koha: Webhook Notifications plugin: Configuration</title>
+[% INCLUDE 'doc-head-close.inc' %]
+</head>
+<body>
+[% INCLUDE 'header.inc' %]
+[% INCLUDE 'cat-search.inc' %]
+
+<div id="breadcrumbs"><a href="/cgi-bin/koha/mainpage.pl">Home</a> &rsaquo; <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a> &rsaquo; Webhook Notifications &rsaquo; Configuration</div>
+
+<div id="doc3">
+    <h1>Webhook Notifications Configuration</h1>
+
+    <div class="alert alert-info">
+        <strong>Note:</strong> Authentication and endpoint settings are configured via environment variables:
+        <ul>
+            <li><code>WEBHOOK_AUTH_URL</code> - OAuth2 token endpoint (required)</li>
+            <li><code>WEBHOOK_CLIENT_ID</code> - OAuth2 client ID (required)</li>
+            <li><code>WEBHOOK_CLIENT_SECRET</code> - OAuth2 client secret (required)</li>
+            <li><code>WEBHOOK_NOTICE_URL</code> - Webhook endpoint for notices (required)</li>
+            <li><code>WEBHOOK_CUSTOMER_ID</code> - Customer ID header value (optional, required by some APIs)</li>
+        </ul>
+    </div>
+
+    <form method="get">
+      <input type="hidden" name="class" value="[% CLASS %]"/>
+      <input type="hidden" name="method" value="[% METHOD %]"/>
+      <input type="hidden" name="save" value="1" />
+
+      <fieldset>
+        <legend>Payload Settings</legend>
+
+        <div class="form-group">
+          <label for="payload_format">Payload Format</label>
+          <select name="payload_format" id="payload_format" class="form-control">
+            <option value="full" [% IF payload_format == 'full' %]selected="selected"[% END %]>Full (enriched data with patron, item, biblio details)</option>
+            <option value="minimal" [% IF payload_format == 'minimal' %]selected="selected"[% END %]>Minimal (IDs only - patron_id, hold_id, etc.)</option>
+          </select>
+          <p class="help-block">Choose whether to send full enriched data or just identifiers to the webhook.</p>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Archive Settings</legend>
+
+        <div class="form-group">
+          <label for="archive_dir">Archive Directory</label>
+          <input type="text" name="archive_dir" id="archive_dir" class="form-control" value="[% archive_dir %]">
+          <p class="help-block">Directory to store copies of sent notifications for debugging. Files older than 30 days are automatically deleted.</p>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Overdue Notice Settings</legend>
+
+        <div class="form-group">
+          <div class="checkbox">
+            <label>
+              <input type="checkbox" name="skip_odue_if_other_if_sms_or_email" value="1" [% IF skip_odue_if_other_if_sms_or_email %]checked="checked"[% END %]>
+              Do not call patrons for overdues if they have a valid SMS alert number or email address.
+            </label>
+          </div>
+        </div>
+      </fieldset>
+
+      <button type="submit" class="btn btn-primary">Save Configuration</button>
+    </form>
+
+    <hr>
+
+    <h2>Environment Variables</h2>
+    <p>The following optional environment variables can also be set:</p>
+    <table class="table table-striped">
+      <thead>
+        <tr>
+          <th>Variable</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>WEBHOOK_ARCHIVE_PATH</code></td>
+          <td>Override the archive directory path</td>
+          <td><code>/var/lib/koha/{instance}/webhook_notifications_archive</code></td>
+        </tr>
+        <tr>
+          <td><code>WEBHOOK_TEST_MODE</code></td>
+          <td>Set to 1 to enable test mode (generates JSON but doesn't send or update status)</td>
+          <td>Not set</td>
+        </tr>
+        <tr>
+          <td><code>WEBHOOK_VERBOSE</code></td>
+          <td>Set to 1 for verbose logging output</td>
+          <td>Not set</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>YAML Front-Matter</h2>
+    <p>To enable webhook notifications for a notice template, add the following YAML front-matter to the notice content:</p>
+    <pre>---
+webhook: yes
+patron: [% patron.borrowernumber %]
+# Add other relevant IDs as needed:
+# checkout: [% checkout.issue_id %]
+# hold: [% hold.reserve_id %]
+# library: [% branch.branchcode %]
+---</pre>
+
+[% INCLUDE 'intranet-bottom.inc' %]

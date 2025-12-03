@@ -1,0 +1,135 @@
+{
+  "/message/{message_id}/status":{
+    "post":{
+      "x-mojo-to":"Com::ByWaterSolutions::WebhookNotifications::API#update_message_status",
+      "operationId":"updateMessageStatus",
+      "tags":[
+        "messages"
+      ],
+      "summary":"Update message delivery status",
+      "description":"Allows external webhook services to report back the delivery status of messages (for asynchronous workflows)",
+      "parameters":[
+        {
+          "name":"message_id",
+          "in":"path",
+          "description":"Internal message identifier",
+          "required":true,
+          "type":"integer"
+        },
+        {
+          "name":"status",
+          "in":"query",
+          "description":"Status of message, either 'sent' or 'failed'",
+          "required":true,
+          "type":"string"
+        },
+        {
+          "name":"subject",
+          "in":"query",
+          "description":"Subject of message",
+          "required":false,
+          "type":"string"
+        },
+        {
+          "name":"content",
+          "in":"query",
+          "description":"Content of message",
+          "required":false,
+          "type":"string"
+        }
+      ],
+      "responses":{
+        "204":{
+          "description":"Message status updated successfully"
+        },
+        "400":{
+          "description":"Invalid status value",
+          "schema":{
+            "type":"object",
+            "properties":{
+              "error":{
+                "description":"An explanation for the error",
+                "type":"string"
+              }
+            }
+          }
+        },
+        "404":{
+          "description":"Message not found",
+          "schema":{
+            "type":"object",
+            "properties":{
+              "error":{
+                "description":"An explanation for the error",
+                "type":"string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "/message/{message_id}/content":{
+    "post":{
+      "x-mojo-to":"Com::ByWaterSolutions::WebhookNotifications::API#update_message_content",
+      "operationId":"updateMessageContent",
+      "tags":[
+        "messages"
+      ],
+      "summary":"Update message content",
+      "description":"Allows external webhook services to modify message content before or after delivery",
+      "parameters":[
+        {
+          "name":"message_id",
+          "in":"path",
+          "description":"Internal message identifier",
+          "required":true,
+          "type":"integer"
+        },
+        {
+          "name":"subject",
+          "in":"query",
+          "description":"Subject of message",
+          "required":false,
+          "type":"string"
+        },
+        {
+          "name":"content",
+          "in":"query",
+          "description":"Content of message",
+          "required":true,
+          "type":"string"
+        }
+      ],
+      "responses":{
+        "204":{
+          "description":"Message content updated successfully"
+        },
+        "400":{
+          "description":"No content provided",
+          "schema":{
+            "type":"object",
+            "properties":{
+              "error":{
+                "description":"An explanation for the error",
+                "type":"string"
+              }
+            }
+          }
+        },
+        "404":{
+          "description":"Message not found",
+          "schema":{
+            "type":"object",
+            "properties":{
+              "error":{
+                "description":"An explanation for the error",
+                "type":"string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
