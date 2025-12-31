@@ -570,10 +570,10 @@ sub before_send_messages {
         my $username  = $self->retrieve_data('username');
         my $password  = $self->retrieve_data('password');
         my $directory = $ENV{MESSAGEBEE_SFTP_DIR} || 'cust2unique';
-
+        try {
         my $sftp = Net::SFTP::Foreign->new(host => $host, user => $username, port => 22, password => $password);
 
-        try {
+
             $sftp->die_on_error("Unable to establish SFTP connection");
             $sftp->setcwd($directory)        or die "unable to change cwd: " . $sftp->error;
             $sftp->put($realpath, $filename) or die "put failed: " . $sftp->error;
