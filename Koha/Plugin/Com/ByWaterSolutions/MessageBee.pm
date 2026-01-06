@@ -49,9 +49,9 @@ our $default_archive_dir = $ENV{MESSAGEBEE_ARCHIVE_PATH} || "/var/lib/koha/$inst
 
 unless (-d $default_archive_dir) {
     make_path($default_archive_dir) or die "Failed to create path '$default_archive_dir': $!";
-    print "Nested directory created: $default_archive_dir\n";
+    warn "Nested directory created: $default_archive_dir\n";
 } else {
-    print "Directory already exists: $default_archive_dir\n";
+    warn "Directory already exists: $default_archive_dir\n";
 }
 
 
