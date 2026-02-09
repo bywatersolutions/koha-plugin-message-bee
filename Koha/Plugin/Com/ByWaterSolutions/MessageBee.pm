@@ -9,18 +9,18 @@ use base qw(Koha::Plugins::Base);
 ## We will also need to include any Koha libraries we want to access
 use C4::Auth;
 use C4::Context;
-use C4::Log qw(logaction);
+use C4::Log         qw(logaction);
 use Koha::DateUtils qw(dt_from_string);
 use Koha::Logger;
 
 use Data::Dumper;
 use DateTime;
-use File::Path qw(make_path);
-use File::Path qw(make_path);
+use File::Path  qw(make_path);
+use File::Path  qw(make_path);
 use File::Slurp qw(write_file);
-use File::Temp qw(tempdir);
-use List::Util qw(any);
-use Mojo::JSON qw(encode_json decode_json);
+use File::Temp  qw(tempdir);
+use List::Util  qw(any);
+use Mojo::JSON  qw(encode_json decode_json);
 use Net::SFTP::Foreign;
 use POSIX;
 use Try::Tiny;
@@ -164,7 +164,7 @@ sub before_send_messages {
     # log4perl.appender.MESSAGEBEE.layout=PatternLayout
     # log4perl.appender.MESSAGEBEE.layout.ConversionPattern=[%d] [%p] %m%n
     # log4perl.appender.MESSAGEBEE.utf8=1
-    my $log = Koha::Logger->get({ interace => 'plugin', category => 'MessageBee', prefix => 0 });
+    my $log = Koha::Logger->get({interace => 'plugin', category => 'MessageBee', prefix => 0});
 
     my $is_cronjob = $0 =~ /process_message_queue.pl$/;
 
@@ -213,7 +213,8 @@ sub before_send_messages {
                 opendir $dirh, $archive_dir or die "Cannot open directory: $!";
             } catch {
                 $info->{error_message} = $_;
-                logaction('MESSAGEBEE', 'CREATE_DIR_FAILED', undef, JSON->new->pretty->encode($info), 'cron') if $is_cronjob;
+                logaction('MESSAGEBEE', 'CREATE_DIR_FAILED', undef, JSON->new->pretty->encode($info), 'cron')
+                    if $is_cronjob;
                 die "Cannot open directory $archive_dir: $_";
             };
             my @files = readdir $dirh;
@@ -229,11 +230,11 @@ sub before_send_messages {
     }
 
     $is_cronjob && say "MSGBEE - MESSAGE BEE TEST MODE" if $test_mode;
-    $log->info("TEST MODE IS ENABLED")         if $test_mode;
+    $log->info("TEST MODE IS ENABLED")                  if $test_mode;
 
     my $search_params = {status => 'pending', content => {-like => '%messagebee: yes%'},};
 
-    my $message_id  = $params->{message_id};
+    my $message_id = $params->{message_id};
     $search_params->{message_id} = $message_id if $message_id;
 
     # 22.11.00, 22.05.8, 21.11.14 +, bug 27265
@@ -269,11 +270,11 @@ sub before_send_messages {
     my $messages_generated = 0;
 
     my $skip_odue_if_other_if_sms_or_email = $self->retrieve_data('skip_odue_if_other_if_sms_or_email');
-    my $dbh = C4::Context->dbh;
-    my $letter1 = $dbh->selectcol_arrayref(q{SELECT DISTINCT(letter1) FROM overduerules});
-    my $letter2 = $dbh->selectcol_arrayref(q{SELECT DISTINCT(letter2) FROM overduerules});
-    my $letter3 = $dbh->selectcol_arrayref(q{SELECT DISTINCT(letter3) FROM overduerules});
-    my @odue_letter_codes = ( @$letter1, @$letter2, @$letter3 );
+    my $dbh                                = C4::Context->dbh;
+    my $letter1                            = $dbh->selectcol_arrayref(q{SELECT DISTINCT(letter1) FROM overduerules});
+    my $letter2                            = $dbh->selectcol_arrayref(q{SELECT DISTINCT(letter2) FROM overduerules});
+    my $letter3                            = $dbh->selectcol_arrayref(q{SELECT DISTINCT(letter3) FROM overduerules});
+    my @odue_letter_codes                  = (@$letter1, @$letter2, @$letter3);
 
     while (1) {
         my @messages = Koha::Notice::Messages->search($search_params, $other_params)->as_list;
@@ -310,228 +311,255 @@ sub before_send_messages {
                 };
 
                 foreach my $yaml (@yaml) {
-                  try {
-
-                    next unless $yaml;
-                    next unless ref $yaml eq 'HASH';
-                    next unless $yaml->{messagebee};
-                    next unless $yaml->{messagebee} eq 'yes';
-
-                    $messages_seen->{$m->message_id} = 1;
-
-                    my $data;
-                    $data->{message} = $self->scrub_message($m->unblessed);
-
-                    # Handle patron key first in case old checkouts or holds have been anonymized
                     try {
-                        $patron         //= Koha::Patrons->find($yaml->{patron})    if $yaml->{patron};
-                        $data->{patron} //= $self->scrub_patron($patron->unblessed) if $patron;
-                    } catch {
-                        $is_cronjob && say "MSGBEE - Fetching patron failed - $_";
-                    };
+
+                        next unless $yaml;
+                        next unless ref $yaml eq 'HASH';
+                        next unless $yaml->{messagebee};
+                        next unless $yaml->{messagebee} eq 'yes';
+
+                        $messages_seen->{$m->message_id} = 1;
+
+                        my $data;
+                        $data->{message} = $self->scrub_message($m->unblessed);
+
+                        # Handle patron key first in case old checkouts or holds have been anonymized
+                        try {
+                            $patron         //= Koha::Patrons->find($yaml->{patron})    if $yaml->{patron};
+                            $data->{patron} //= $self->scrub_patron($patron->unblessed) if $patron;
+                        } catch {
+                            $is_cronjob && say "MSGBEE - Fetching patron failed - $_";
+                        };
 
 
-                    ## Handle 'checkout' / 'old_checkout'
-                    my $checkout;
-                    if ($yaml->{checkout}) {
-                        $checkout = Koha::Checkouts->find($yaml->{checkout});
-                    }
-                    if ($yaml->{old_checkout}) {
-                        $checkout = Koha::Old::Checkouts->find($yaml->{old_checkout});
-                    }
-                    if ($checkout) {
-                        $patron          //= $checkout->patron;
-                        $data->{patron}  = $self->scrub_patron($patron->unblessed);
-                        $data->{library} = $checkout->library->unblessed;
-
-                        my $subdata;
-                        my $item = $checkout->item;
-                        $subdata->{checkout}   = $checkout->unblessed;
-                        $subdata->{item}       = $item->unblessed;
-                        $subdata->{biblio}     = $self->scrub_biblio($item->biblio->unblessed);
-                        $subdata->{biblioitem} = $item->biblioitem->unblessed;
-                        $subdata->{itemtype}   = $item->itemtype->unblessed;
-
-                        $data->{checkouts} = [$subdata];
-                    }
-
-                    ## Handle 'checkouts'
-                    if ($yaml->{checkouts}) {
-                        my @checkouts = split(/,/, $yaml->{checkouts});
-
-                        foreach my $id (@checkouts) {
-                            my $checkout = Koha::Checkouts->find($id);
-                            next unless $checkout;
-
+                        ## Handle 'checkout' / 'old_checkout'
+                        my $checkout;
+                        if ($yaml->{checkout}) {
+                            $checkout = Koha::Checkouts->find($yaml->{checkout});
+                        }
+                        if ($yaml->{old_checkout}) {
+                            $checkout = Koha::Old::Checkouts->find($yaml->{old_checkout});
+                        }
+                        if ($checkout) {
                             $patron //= $checkout->patron;
-                            $data->{patron} //= $self->scrub_patron($patron->unblessed);
+                            $data->{patron}  = $self->scrub_patron($patron->unblessed);
+                            $data->{library} = $checkout->library->unblessed;
 
                             my $subdata;
                             my $item = $checkout->item;
                             $subdata->{checkout}   = $checkout->unblessed;
-                            $subdata->{library}    = $checkout->library->unblessed;
                             $subdata->{item}       = $item->unblessed;
                             $subdata->{biblio}     = $self->scrub_biblio($item->biblio->unblessed);
                             $subdata->{biblioitem} = $item->biblioitem->unblessed;
                             $subdata->{itemtype}   = $item->itemtype->unblessed;
 
-                            $data->{checkouts} //= [];
-                            push(@{$data->{checkouts}}, $subdata);
-                        }
-                    }
-
-                    ## Handle 'hold'
-                    if ($yaml->{hold}) {
-                        my $hold = Koha::Holds->find($yaml->{hold});
-                        $m->update({status => 'failed', failure_code => "Hold with id $yaml->{hold} not found"}) && next unless $hold;
-
-                        my $biblio = $hold->biblio;
-                        $m->update({status => 'failed', failure_code => "Bib for hold with id $yaml->{hold} not found"}) && next unless $biblio;
-
-                        my $biblioitem = $biblio->biblioitem;
-                        $m->update({status => 'failed', failure_code => "Bib item for hold with id $yaml->{hold} not found"}) && next unless $biblioitem;
-
-                        $patron //= $hold->patron;
-                        $data->{patron} //= $self->scrub_patron($patron->unblessed);
-
-                        my $subdata;
-                        $subdata->{hold}           = $hold->unblessed;
-                        $subdata->{pickup_library} = $hold->branch->unblessed;
-                        $subdata->{biblio}         = $self->scrub_biblio($biblio->unblessed);
-                        $subdata->{biblioitem}     = $biblioitem->unblessed;
-
-                        if (my $item = $hold->item) {
-                            $subdata->{item}     = $item->unblessed;
-                            $subdata->{itemtype} = $item->itemtype->unblessed;
+                            $data->{checkouts} = [$subdata];
                         }
 
-                        $data->{holds} = [$subdata];
-                    }
+                        ## Handle 'checkouts'
+                        if ($yaml->{checkouts}) {
+                            my @checkouts = split(/,/, $yaml->{checkouts});
 
-                    ## Handle 'old_hold'
-                    if ($yaml->{old_hold}) {
-                        my $hold = Koha::Old::Holds->find($yaml->{old_hold});
-                        $m->update({status => 'failed', failure_code => "Hold with id $yaml->{old_hold} not found"}) && next unless $hold;
+                            foreach my $id (@checkouts) {
+                                my $checkout = Koha::Checkouts->find($id);
+                                next unless $checkout;
 
-                        my $biblio = Koha::Biblios->find($hold->biblionumber);
-                        $m->update({status => 'failed', failure_code => "Bib for old hold with id $yaml->{old_hold} not found"}) && next unless $biblio;
+                                $patron //= $checkout->patron;
+                                $data->{patron} //= $self->scrub_patron($patron->unblessed);
 
-                        my $biblioitem = $biblio->biblioitem;
-                        $m->update({status => 'failed', failure_code => "Bib for old hold with id $yaml->{old_hold} not found"}) && next unless $biblio;
+                                my $subdata;
+                                my $item = $checkout->item;
+                                $subdata->{checkout}   = $checkout->unblessed;
+                                $subdata->{library}    = $checkout->library->unblessed;
+                                $subdata->{item}       = $item->unblessed;
+                                $subdata->{biblio}     = $self->scrub_biblio($item->biblio->unblessed);
+                                $subdata->{biblioitem} = $item->biblioitem->unblessed;
+                                $subdata->{itemtype}   = $item->itemtype->unblessed;
 
-                        $patron //= $hold->patron;
-                        $data->{patron} //= $self->scrub_patron($patron->unblessed);
-
-                        my $subdata;
-                        $subdata->{holds}          = [$hold->unblessed];
-                        $subdata->{pickup_library} = Koha::Libraries->find($hold->branchcode);
-                        $subdata->{biblio}         = $self->scrub_biblio($biblio->unblessed);
-                        $subdata->{biblioitem}     = $biblioitem->unblessed;
-
-                        if (my $item = $hold->item) {
-                            $subdata->{item}     = $item->unblessed;
-                            $subdata->{itemtype} = $item->itemtype->unblessed;
+                                $data->{checkouts} //= [];
+                                push(@{$data->{checkouts}}, $subdata);
+                            }
                         }
 
-                        $data->{holds} = [$subdata];
-                    }
+                        ## Handle 'hold'
+                        if ($yaml->{hold}) {
+                            my $hold = Koha::Holds->find($yaml->{hold});
+                            $m->update({status => 'failed', failure_code => "Hold with id $yaml->{hold} not found"})
+                                && next
+                                unless $hold;
 
-                    ## Handle 'holds'
-                    if ($yaml->{holds}) {
-                        my @holds = split(/,/, $yaml->{holds});
+                            my $biblio = $hold->biblio;
+                            $m->update({
+                                status => 'failed', failure_code => "Bib for hold with id $yaml->{hold} not found"
+                            })
+                                && next
+                                unless $biblio;
 
-                        foreach my $id (@holds) {
-                            my $hold = Koha::Holds->find($id);
-                            next unless $hold;
+                            my $biblioitem = $biblio->biblioitem;
+                            $m->update({
+                                status       => 'failed',
+                                failure_code => "Bib item for hold with id $yaml->{hold} not found"
+                            })
+                                && next
+                                unless $biblioitem;
 
                             $patron //= $hold->patron;
                             $data->{patron} //= $self->scrub_patron($patron->unblessed);
 
                             my $subdata;
-                            my $item = $hold->item;
                             $subdata->{hold}           = $hold->unblessed;
                             $subdata->{pickup_library} = $hold->branch->unblessed;
-                            if ($item) {
-                                $subdata->{item}       = $item->unblessed;
-                                $subdata->{itemtype}   = $item->itemtype->unblessed;
-                                $subdata->{biblio}     = $self->scrub_biblio($item->biblio->unblessed);
-                                $subdata->{biblioitem} = $item->biblioitem->unblessed;
+                            $subdata->{biblio}         = $self->scrub_biblio($biblio->unblessed);
+                            $subdata->{biblioitem}     = $biblioitem->unblessed;
+
+                            if (my $item = $hold->item) {
+                                $subdata->{item}     = $item->unblessed;
+                                $subdata->{itemtype} = $item->itemtype->unblessed;
                             }
 
-                            $data->{holds} //= [];
-                            push(@{$data->{holds}}, $subdata);
+                            $data->{holds} = [$subdata];
                         }
-                    }
 
-                    ## Handle misc key/value pairs
-                    try {
-                        $data->{library} ||= Koha::Libraries->find($yaml->{library})->unblessed if $yaml->{library};
-                    } catch {
-                        $is_cronjob && say "MSGBEE - Fetching library failed - $_";
-                    };
+                        ## Handle 'old_hold'
+                        if ($yaml->{old_hold}) {
+                            my $hold = Koha::Old::Holds->find($yaml->{old_hold});
+                            $m->update({status => 'failed', failure_code => "Hold with id $yaml->{old_hold} not found"})
+                                && next
+                                unless $hold;
 
-                    try {
-                        $data->{item} ||= Koha::Items->find($yaml->{item})->unblessed if $yaml->{item};
-                    } catch {
-                        $is_cronjob && say "MSGBEE - Fetching item failed - $_";
-                    };
+                            my $biblio = Koha::Biblios->find($hold->biblionumber);
+                            $m->update({
+                                status       => 'failed',
+                                failure_code => "Bib for old hold with id $yaml->{old_hold} not found"
+                            })
+                                && next
+                                unless $biblio;
 
-                    try {
-                        $data->{biblio} ||= $self->scrub_biblio(Koha::Biblios->find($yaml->{biblio})->unblessed)
-                            if $yaml->{biblio};
-                    } catch {
-                        $is_cronjob && say "MSGBEE - Fetching biblio failed - $_";
-                    };
+                            my $biblioitem = $biblio->biblioitem;
+                            $m->update({
+                                status       => 'failed',
+                                failure_code => "Bib for old hold with id $yaml->{old_hold} not found"
+                            })
+                                && next
+                                unless $biblio;
 
-                    try {
-                        $data->{biblioitem} ||= Koha::Biblioitems->find($yaml->{biblioitem})->unblessed
-                            if $yaml->{biblioitem};
-                    } catch {
-                        $is_cronjob && say "MSGBEE - Fetching biblioitem failed - $_";
-                    };
+                            $patron //= $hold->patron;
+                            $data->{patron} //= $self->scrub_patron($patron->unblessed);
 
-                    try {
-                        $data->{patron}->{account_balance} = $patron->account->balance if $patron;
-                    } catch {
-                        $is_cronjob && say "MSGBEE - Fetching patron account balance failed - $_";
-                    };
+                            my $subdata;
+                            $subdata->{holds}          = [$hold->unblessed];
+                            $subdata->{pickup_library} = Koha::Libraries->find($hold->branchcode);
+                            $subdata->{biblio}         = $self->scrub_biblio($biblio->unblessed);
+                            $subdata->{biblioitem}     = $biblioitem->unblessed;
 
-                    # If enabled, skip sending if this is an overdue notice *and* the patron has an sms number or email address
-                    if ($m->message_transport_type eq 'phone' && $skip_odue_if_other_if_sms_or_email && any { $m->{letter_code} eq $_ } @odue_letter_codes) {
-                        my $skip = $patron->notice_email_address || $patron->smsalertnumber;
+                            if (my $item = $hold->item) {
+                                $subdata->{item}     = $item->unblessed;
+                                $subdata->{itemtype} = $item->itemtype->unblessed;
+                            }
 
-                        if ($skip) {
-                            $m->status('deleted');    # As close a status to 'skipped' as we have
-                            $m->failure_code('Patron already recieved a "hold ready for pickup" in this notice batch.');
-                            $m->update();
-                            next;
+                            $data->{holds} = [$subdata];
                         }
-                    }
 
-                    if (keys %$data) {
-                        $m->update({status => 'sent'}) unless $test_mode;
-                        $messages_generated++;
-                        push(@message_data, $data);
-                        $is_cronjob && say "MSGBEE - MESSAGE DATA: " . Data::Dumper::Dumper($data) if $verbose > 1;
-                        $results->{sent}++;
-                        $log->info("MESSAGE ${\($m->id)} SENT");
-                        $info->{results}->{sent}->{successful}++;
-                    } else {
-                        $m->update({status => 'failed', failure_code => 'NO DATA'}) unless $test_mode;
-                        $results->{failed}++;
+                        ## Handle 'holds'
+                        if ($yaml->{holds}) {
+                            my @holds = split(/,/, $yaml->{holds});
+
+                            foreach my $id (@holds) {
+                                my $hold = Koha::Holds->find($id);
+                                next unless $hold;
+
+                                $patron //= $hold->patron;
+                                $data->{patron} //= $self->scrub_patron($patron->unblessed);
+
+                                my $subdata;
+                                my $item = $hold->item;
+                                $subdata->{hold}           = $hold->unblessed;
+                                $subdata->{pickup_library} = $hold->branch->unblessed;
+                                if ($item) {
+                                    $subdata->{item}       = $item->unblessed;
+                                    $subdata->{itemtype}   = $item->itemtype->unblessed;
+                                    $subdata->{biblio}     = $self->scrub_biblio($item->biblio->unblessed);
+                                    $subdata->{biblioitem} = $item->biblioitem->unblessed;
+                                }
+
+                                $data->{holds} //= [];
+                                push(@{$data->{holds}}, $subdata);
+                            }
+                        }
+
+                        ## Handle misc key/value pairs
+                        try {
+                            $data->{library} ||= Koha::Libraries->find($yaml->{library})->unblessed if $yaml->{library};
+                        } catch {
+                            $is_cronjob && say "MSGBEE - Fetching library failed - $_";
+                        };
+
+                        try {
+                            $data->{item} ||= Koha::Items->find($yaml->{item})->unblessed if $yaml->{item};
+                        } catch {
+                            $is_cronjob && say "MSGBEE - Fetching item failed - $_";
+                        };
+
+                        try {
+                            $data->{biblio} ||= $self->scrub_biblio(Koha::Biblios->find($yaml->{biblio})->unblessed)
+                                if $yaml->{biblio};
+                        } catch {
+                            $is_cronjob && say "MSGBEE - Fetching biblio failed - $_";
+                        };
+
+                        try {
+                            $data->{biblioitem} ||= Koha::Biblioitems->find($yaml->{biblioitem})->unblessed
+                                if $yaml->{biblioitem};
+                        } catch {
+                            $is_cronjob && say "MSGBEE - Fetching biblioitem failed - $_";
+                        };
+
+                        try {
+                            $data->{patron}->{account_balance} = $patron->account->balance if $patron;
+                        } catch {
+                            $is_cronjob && say "MSGBEE - Fetching patron account balance failed - $_";
+                        };
+
+             # If enabled, skip sending if this is an overdue notice *and* the patron has an sms number or email address
+                        if (   $m->message_transport_type eq 'phone'
+                            && $skip_odue_if_other_if_sms_or_email
+                            && any { $m->{letter_code} eq $_ } @odue_letter_codes)
+                        {
+                            my $skip = $patron->notice_email_address || $patron->smsalertnumber;
+
+                            if ($skip) {
+                                $m->status('deleted');    # As close a status to 'skipped' as we have
+                                $m->failure_code(
+                                    'Patron already recieved a "hold ready for pickup" in this notice batch.');
+                                $m->update();
+                                next;
+                            }
+                        }
+
+                        if (keys %$data) {
+                            $m->update({status => 'sent'}) unless $test_mode;
+                            $messages_generated++;
+                            push(@message_data, $data);
+                            $is_cronjob && say "MSGBEE - MESSAGE DATA: " . Data::Dumper::Dumper($data) if $verbose > 1;
+                            $results->{sent}++;
+                            $log->info("MESSAGE ${\($m->id)} SENT");
+                            $info->{results}->{sent}->{successful}++;
+                        } else {
+                            $m->update({status => 'failed', failure_code => 'NO DATA'}) unless $test_mode;
+                            $results->{failed}++;
+                            $info->{results}->{sent}->{failed}++;
+                            $log->info("MESSAGE ${\($m->id)} FAILED");
+                        }
+                    } catch {
+                        $is_cronjob && say "MSGBEE - ERROR - Processing Message ${\( $m->id )} Failed - $_";
+                        $log->error("Processing Message ${\( $m->id )} Failed - $_");
+                        $m->status('failed');
+                        $m->failure_code("ERROR: $_");
+                        $m->update() unless $test_mode;
                         $info->{results}->{sent}->{failed}++;
-                        $log->info("MESSAGE ${\($m->id)} FAILED");
-                    }
-                } catch {
-                    $is_cronjob && say "MSGBEE - ERROR - Processing Message ${\( $m->id )} Failed - $_";
-                    $log->error("Processing Message ${\( $m->id )} Failed - $_");
-                    $m->status('failed');
-                    $m->failure_code("ERROR: $_");
-                    $m->update() unless $test_mode;
-                    $info->{results}->{sent}->{failed}++;
-                    $results->{failed}++;
-                };
-              }
+                        $results->{failed}++;
+                    };
+                }
             } catch {
                 $is_cronjob && say "MSGBEE - ERROR - Processing Message ${\( $m->id )} Failed - $_";
                 $log->error("Processing Message ${\( $m->id )} Failed - $_");
@@ -568,7 +596,7 @@ sub before_send_messages {
         my $password  = $self->retrieve_data('password');
         my $directory = $ENV{MESSAGEBEE_SFTP_DIR} || 'cust2unique';
         try {
-        my $sftp = Net::SFTP::Foreign->new(host => $host, user => $username, port => 22, password => $password);
+            my $sftp = Net::SFTP::Foreign->new(host => $host, user => $username, port => 22, password => $password);
 
 
             $sftp->die_on_error("Unable to establish SFTP connection");
