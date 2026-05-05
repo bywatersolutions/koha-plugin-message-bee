@@ -12,6 +12,7 @@ use C4::Context;
 use C4::Log         qw(logaction);
 use Koha::DateUtils qw(dt_from_string);
 use Koha::Logger;
+use Koha::Encryption;
 
 use Data::Dumper;
 use DateTime;
@@ -86,17 +87,21 @@ sub configure {
         $template->param(
             host                               => $self->retrieve_data('host'),
             username                           => $self->retrieve_data('username'),
-            password                           => $self->retrieve_data('password'),
             archive_dir                        => $self->retrieve_data('archive_dir') || $default_archive_dir,
             skip_odue_if_other_if_sms_or_email => $self->retrieve_data('skip_odue_if_other_if_sms_or_email'),
         );
+        try {
+            $template->param(
+                password => Koha::Encryption->new->decrypt_hex( $self->retrieve_data('password') ),
+            );
+        };
 
         $self->output_html($template->output());
     } else {
         $self->store_data({
             host                               => $cgi->param('host'),
             username                           => $cgi->param('username'),
-            password                           => $cgi->param('password'),
+            password => Koha::Encryption->new->encrypt_hex( $cgi->param('password') ),
             archive_dir                        => $cgi->param('archive_dir'),
             skip_odue_if_other_if_sms_or_email => $cgi->param('skip_odue_if_other_if_sms_or_email'),
         });
@@ -593,7 +598,7 @@ sub before_send_messages {
 
         my $host      = $self->retrieve_data('host');
         my $username  = $self->retrieve_data('username');
-        my $password  = $self->retrieve_data('password');
+        my $password = Koha::Encryption->new->decrypt_hex( $self->retrieve_data('password') );
         my $directory = $ENV{MESSAGEBEE_SFTP_DIR} || 'cust2unique';
         try {
             my $sftp = Net::SFTP::Foreign->new(host => $host, user => $username, port => 22, password => $password);
