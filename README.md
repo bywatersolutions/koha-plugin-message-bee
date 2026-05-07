@@ -46,6 +46,8 @@ CHECKOUT:
 messagebee: yes
 checkout: [% checkout.id %]
 library: [% branch.id %]
+#Title: [% checkout.biblio.title %] [% checkout.biblio.subtitle %]
+#Barcode: [% checkout.item.barcode %]
 ----
 ```
 
@@ -56,6 +58,8 @@ RENEWAL:
 messagebee: yes
 checkout: [% checkout.id %]
 library: [% branch.id %]
+#Title: [% checkout.biblio.title %] [% checkout.biblio.subtitle %]
+#Barcode: [% checkout.item.barcode %]
 ----
 ```
 
@@ -67,6 +71,8 @@ messagebee: yes
 old_checkout: [% old_checkout.issue_id %]
 patron: [% borrower.borrowernumber %]
 library: [% branch.id %]
+#Title: [% old_checkout.biblio.title %] [% old_checkout.biblio.subtitle %]
+#Barcode: [% old_checkout.item.barcode %]
 ----
 ```
 
@@ -75,6 +81,8 @@ HOLD:
 ---
 messagebee: yes
 hold: [% hold.id %]
+#Title: [% hold.biblio.title %] [% hold.biblio.subtitle %]
+#Barcode: [% hold.item.barcode %]
 ```
 
 HOLDDGST:
@@ -83,6 +91,8 @@ HOLDDGST:
 ---
 messagebee: yes
 hold: [% hold.id %]
+#Title: [% hold.biblio.title %] [% hold.biblio.subtitle %]
+#Barcode: [% hold.item.barcode %]
 ----
 ```
 
@@ -100,6 +110,8 @@ messagebee: yes
 old_hold: [% hold.id %]
 library: [% branch.id %]
 patron: [% borrower.id %]
+#Title: [% hold.biblio.title %] [% hold.biblio.subtitle %]
+#Barcode: [% hold.item.barcode %]
 ```
 
 CANCEL_HOLD_ON_LOST:
@@ -109,6 +121,8 @@ messagebee: yes
 old_hold: [% hold.id %]
 library: [% branch.id %]
 patron: [% borrower.id %]
+#Title: [% hold.biblio.title %] [% hold.biblio.subtitle %]
+#Barcode: [% hold.item.barcode %]
 ```
 
 NOTE: Predue notices require Koha bug 29100.
@@ -119,6 +133,8 @@ PREDUE:
 messagebee: yes
 patron: [% borrower.id %]
 checkout: [% checkout.issue_id %]
+#Title: [% checkout.biblio.title %] [% checkout.biblio.subtitle %]
+#Barcode: [% checkout.item.barcode %]
 ```
 
 PREDUEDGST:
@@ -134,6 +150,8 @@ DUE:
 ---
 messagebee: yes
 checkout: [% checkout.issue_id %]
+#Title: [% checkout.biblio.title %] [% checkout.biblio.subtitle %]
+#Barcode: [% checkout.item.barcode %]
 ```
 
 DUEDGST:
@@ -148,6 +166,8 @@ AUTO_RENEWALS:
 ---
 messagebee: yes
 checkout: [% checkout.id %]
+#Title: [% checkout.biblio.title %] [% checkout.biblio.subtitle %]
+#Barcode: [% checkout.item.barcode %]
 ```
 
 AUTO_RENEWALS_DGST:
@@ -169,6 +189,7 @@ MEMBERSHIP_EXPIRY:
 ---
 messagebee: yes
 patron: [% borrower.borrowernumber %]
+#Expiration date: [% borrower.dateexpiry %]
 ```
 
 WELCOME:
