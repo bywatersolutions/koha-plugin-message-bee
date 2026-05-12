@@ -237,7 +237,12 @@ sub before_send_messages {
     $is_cronjob && say "MSGBEE - MESSAGE BEE TEST MODE" if $test_mode;
     $log->info("TEST MODE IS ENABLED")                  if $test_mode;
 
-    my $search_params = {status => 'pending', content => {-like => '%messagebee: yes%'},};
+    my $search_params = {
+        -or => [
+            { status => 'pending', content => { -like => '%messagebee: yes%' } },
+            { status => 'failed',  failure_code => 'MESSAGEBEE_RETRY' },
+        ],
+    };
 
     my $message_id = $params->{message_id};
     $search_params->{message_id} = $message_id if $message_id;
@@ -271,6 +276,7 @@ sub before_send_messages {
 
     my $results = {sent => 0, failed => 0};
     my @message_data;
+    my @sent_message_ids;
     my $messages_seen      = {};
     my $messages_generated = 0;
 
@@ -542,7 +548,10 @@ sub before_send_messages {
                         }
 
                         if (keys %$data) {
-                            $m->update({status => 'sent'}) unless $test_mode;
+                            unless ($test_mode) {
+                                $m->update({status => 'sent'});
+                                push @sent_message_ids, $m->id;
+                            }
                             $messages_generated++;
                             push(@message_data, $data);
                             $is_cronjob && say "MSGBEE - MESSAGE DATA: " . Data::Dumper::Dumper($data) if $verbose > 1;
@@ -601,7 +610,19 @@ sub before_send_messages {
         my $password = Koha::Encryption->new->decrypt_hex( $self->retrieve_data('password') );
         my $directory = $ENV{MESSAGEBEE_SFTP_DIR} || 'cust2unique';
         try {
-            my $sftp = Net::SFTP::Foreign->new(host => $host, user => $username, port => 22, password => $password);
+            my $sftp = Net::SFTP::Foreign->new(
+                host     => $host,
+                user     => $username,
+                port     => 22,
+                password => $password,
+                timeout  => 5,
+                more     => [
+                    -o => 'ConnectTimeout=3',
+                    -o => 'ServerAliveInterval=3',
+                    -o => 'ServerAliveCountMax=2',
+                    -o => 'BatchMode=yes',
+                ],
+            );
 
 
             $sftp->die_on_error("Unable to establish SFTP connection");
@@ -609,6 +630,18 @@ sub before_send_messages {
             $sftp->put($realpath, $filename) or die "put failed: " . $sftp->error;
         } catch {
             $info->{sftp_error_message} = $_;
+            if (@sent_message_ids) {
+                Koha::Notice::Messages
+                    ->search({ message_id => { -in => \@sent_message_ids } })
+                    ->update({
+                        status       => 'failed',
+                        failure_code => 'MESSAGEBEE_RETRY',
+                    });
+                $log->warn(
+                    "SFTP failed; marked " . scalar(@sent_message_ids)
+                  . " messages as failed/MESSAGEBEE_RETRY for retry next run"
+                );
+            }
         }
     }
 
