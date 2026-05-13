@@ -11,6 +11,7 @@ use C4::Auth;
 use C4::Context;
 use C4::Log         qw(logaction);
 use Koha::DateUtils qw(dt_from_string);
+use Koha::Database;
 use Koha::Logger;
 use Koha::Encryption;
 
@@ -181,23 +182,26 @@ sub before_send_messages {
     }
 
     my $test_mode = $ENV{MESSAGEBEE_TEST_MODE};
-    my $verbose   = $ENV{MESSAGEBEE_VERBOSE} || $params->{verbose};
+    my $verbose   = $ENV{MESSAGEBEE_VERBOSE} || $params->{verbose} || 0;
 
     my $library_name = C4::Context->preference('LibraryName');
     $library_name =~ s/ /_/g;
-    my $dir      = tempdir(CLEANUP => 0);
     my $ts       = strftime("%Y-%m-%dT%H-%M-%S", gmtime(time()));
     my $filename = "$ts-Notices-$library_name.json";
-    my $realpath = "$dir/$filename";
 
     my $archive_dir = $self->retrieve_data('archive_dir') || $default_archive_dir;
+    my $pending_dir = "$archive_dir/pending";
+    make_path($pending_dir) unless -d $pending_dir;
+    my $pending_path = "$pending_dir/$filename";
+
     my $info        = {
         archive_dir  => $archive_dir,
+        pending_dir  => $pending_dir,
         test_mode    => $test_mode,
         library_name => $library_name,
         timestamp    => $ts,
         filename     => $filename,
-        filepath     => $realpath,
+        filepath     => $pending_path,
     };
 
     $is_cronjob && say "MSGBEE - LOG WRITTEN TO $archive_dir/$ts-Notices-$library_name.log";
@@ -237,12 +241,7 @@ sub before_send_messages {
     $is_cronjob && say "MSGBEE - MESSAGE BEE TEST MODE" if $test_mode;
     $log->info("TEST MODE IS ENABLED")                  if $test_mode;
 
-    my $search_params = {
-        -or => [
-            { status => 'pending', content => { -like => '%messagebee: yes%' } },
-            { status => 'failed',  failure_code => 'MESSAGEBEE_RETRY' },
-        ],
-    };
+    my $search_params = { status => 'pending', content => { -like => '%messagebee: yes%' } };
 
     my $message_id = $params->{message_id};
     $search_params->{message_id} = $message_id if $message_id;
@@ -276,7 +275,7 @@ sub before_send_messages {
 
     my $results = {sent => 0, failed => 0};
     my @message_data;
-    my @sent_message_ids;
+    my $has_immediate      = 0;
     my $messages_seen      = {};
     my $messages_generated = 0;
 
@@ -548,10 +547,8 @@ sub before_send_messages {
                         }
 
                         if (keys %$data) {
-                            unless ($test_mode) {
-                                $m->update({status => 'sent'});
-                                push @sent_message_ids, $m->id;
-                            }
+                            $m->update({status => 'sent'}) unless $test_mode;
+                            $has_immediate ||= ( $yaml->{messagebee_immediate} || '' ) eq 'yes';
                             $messages_generated++;
                             push(@message_data, $data);
                             $is_cronjob && say "MSGBEE - MESSAGE DATA: " . Data::Dumper::Dumper($data) if $verbose > 1;
@@ -586,6 +583,11 @@ sub before_send_messages {
 
             $log->info("FINISHED PROCESSING MESSAGE " . $m->id);
         }
+
+        # In test mode none of the bulk-claim, mark-sent, or mark-failed
+        # status updates run, so the next iteration would re-find the
+        # same pending rows. Stop after one pass to avoid an infinite loop.
+        last if $test_mode;
     }
 
     my $dev_version = '{' . 'VERSION' . '}';                                         # Prevents substitution
@@ -601,52 +603,115 @@ sub before_send_messages {
     }
 
     unless ($test_mode) {
-        write_file($realpath, $json);
-        $is_cronjob && say "MSGBEE - FILE WRITTEN TO $realpath";
-        $log->info("MSGBEE - FILE WRITTEN TO $realpath");
+        # Always queue the payload into the pending spool. The actual
+        # SFTP upload runs either in the current process (cron context)
+        # or in a detached grandchild (request context with an
+        # immediate-flagged message); plain request context leaves the
+        # file in the spool for the next cron tick to pick up.
+        write_file($pending_path, $json);
+        $is_cronjob && say "MSGBEE - FILE QUEUED AT $pending_path";
+        $log->info("MSGBEE - FILE QUEUED AT $pending_path");
 
-        my $host      = $self->retrieve_data('host');
-        my $username  = $self->retrieve_data('username');
-        my $password = Koha::Encryption->new->decrypt_hex( $self->retrieve_data('password') );
-        my $directory = $ENV{MESSAGEBEE_SFTP_DIR} || 'cust2unique';
-        try {
-            my $sftp = Net::SFTP::Foreign->new(
-                host     => $host,
-                user     => $username,
-                port     => 22,
-                password => $password,
-                timeout  => 5,
-                more     => [
-                    -o => 'ConnectTimeout=3',
-                    -o => 'ServerAliveInterval=3',
-                    -o => 'ServerAliveCountMax=2',
-                    -o => 'BatchMode=yes',
-                ],
-            );
-
-
-            $sftp->die_on_error("Unable to establish SFTP connection");
-            $sftp->setcwd($directory)        or die "unable to change cwd: " . $sftp->error;
-            $sftp->put($realpath, $filename) or die "put failed: " . $sftp->error;
-        } catch {
-            $info->{sftp_error_message} = $_;
-            if (@sent_message_ids) {
-                Koha::Notice::Messages
-                    ->search({ message_id => { -in => \@sent_message_ids } })
-                    ->update({
-                        status       => 'failed',
-                        failure_code => 'MESSAGEBEE_RETRY',
-                    });
-                $log->warn(
-                    "SFTP failed; marked " . scalar(@sent_message_ids)
-                  . " messages as failed/MESSAGEBEE_RETRY for retry next run"
-                );
-            }
+        if ($is_cronjob) {
+            $self->_upload_pending($pending_dir, $archive_dir, $log);
+        }
+        elsif ($has_immediate) {
+            $self->_async_upload($pending_dir, $archive_dir, $log);
         }
     }
 
     logaction('MESSAGEBEE', 'DONE',               undef, undef,                            'cron') if $is_cronjob;
     logaction('MESSAGEBEE', 'MESSAGES_PROCESSED', undef, JSON->new->pretty->encode($info), 'cron') if $is_cronjob;
+}
+
+sub _upload_pending {
+    my ( $self, $pending_dir, $archive_dir, $log ) = @_;
+
+    return unless -d $pending_dir;
+
+    opendir my $dh, $pending_dir or do {
+        $log->error("MSGBEE - cannot open spool dir $pending_dir: $!");
+        return;
+    };
+    my @files = sort grep { /\.json$/ } readdir $dh;
+    closedir $dh;
+
+    return unless @files;
+
+    my $host      = $self->retrieve_data('host');
+    my $username  = $self->retrieve_data('username');
+    my $password  = Koha::Encryption->new->decrypt_hex( $self->retrieve_data('password') );
+    my $directory = $ENV{MESSAGEBEE_SFTP_DIR} || 'cust2unique';
+
+    my $sftp;
+    try {
+        $sftp = Net::SFTP::Foreign->new(
+            host     => $host,
+            user     => $username,
+            port     => 22,
+            password => $password,
+            timeout  => 5,
+            more     => [
+                -o => 'ConnectTimeout=3',
+                -o => 'ServerAliveInterval=3',
+                -o => 'ServerAliveCountMax=2',
+                -o => 'BatchMode=yes',
+            ],
+        );
+        $sftp->die_on_error("Unable to establish SFTP connection");
+        $sftp->setcwd($directory) or die "unable to change cwd: " . $sftp->error;
+    } catch {
+        $log->warn( "MSGBEE - SFTP connect failed: $_  -- " . scalar(@files) . " files remain in spool" );
+        $sftp = undef;
+    };
+
+    return unless $sftp;
+
+    for my $f (@files) {
+        my $path = "$pending_dir/$f";
+        try {
+            $sftp->put( $path, $f ) or die "put failed: " . $sftp->error;
+            unlink $path or die "unlink $path failed: $!";
+            $log->info("MSGBEE - uploaded $f");
+        } catch {
+            $log->warn("MSGBEE - failed to upload $f: $_  -- left in spool");
+        };
+    }
+}
+
+sub _async_upload {
+    my ( $self, $pending_dir, $archive_dir, $log ) = @_;
+
+    my $pid = fork();
+    if ( !defined $pid ) {
+        $log->error("MSGBEE - fork failed: $!  -- file left in spool for next cron tick");
+        return;
+    }
+    if ( $pid == 0 ) {
+        # Intermediate child opens a new session and double-forks so the
+        # grandchild is reparented to init, so nobody has to wait on it.
+        POSIX::setsid();
+        if ( fork() == 0 ) {
+            # Grandchild is the actual SFTP worker.
+            open STDIN,  '<',  '/dev/null';
+            open STDOUT, '>>', '/dev/null';
+
+            # The parent's DB handle is not fork-safe; force a reconnect on
+            # next access.
+            try { Koha::Database->schema->storage->disconnect } catch { };
+
+            try {
+                $log->info("MSGBEE - detached upload starting");
+                $self->_upload_pending( $pending_dir, $archive_dir, $log );
+                $log->info("MSGBEE - detached upload complete");
+            } catch {
+                $log->error("MSGBEE - detached upload crashed: $_");
+            };
+            exit 0;
+        }
+        exit 0;
+    }
+    waitpid $pid, 0;
 }
 
 sub scrub_biblio {
