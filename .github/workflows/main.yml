@@ -40,7 +40,18 @@ jobs:
         cd ..
         git clone --branch ${{ env.KOHA_BRANCH }} --single-branch --depth 1 https://github.com/Koha-Community/Koha.git kohaclone
 
+    - name: Skip if this Koha lacks Koha::File::Transport
+      id: support_check
+      run: |
+        if [ -f "$SYNC_REPO/Koha/File/Transport.pm" ]; then
+          echo "supported=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "supported=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::Koha::File::Transport not present in ${{ env.KOHA_BRANCH }}, skipping plugin tests"
+        fi
+
     - name: Install koha-testing-docker
+      if: steps.support_check.outputs.supported == 'true'
       run: |
         cd ..
         git clone https://gitlab.com/koha-community/koha-testing-docker.git
@@ -49,6 +60,7 @@ jobs:
         echo "$(pwd)/bin" >> $GITHUB_PATH
 
     - name: Launch KTD instance with plugins support
+      if: steps.support_check.outputs.supported == 'true'
       run: |
         cd ../koha-testing-docker
         export LOCAL_USER_ID=$(id -u)
@@ -61,12 +73,14 @@ jobs:
         ktd --name messagebee --plugins up -d
 
     - name: Wait for KTD to be ready
+      if: steps.support_check.outputs.supported == 'true'
       run: |
         cd ../koha-testing-docker
         export KTD_HOME=$(pwd)
         ktd --name messagebee --wait-ready 500
 
     - name: Run plugin tests
+      if: steps.support_check.outputs.supported == 'true'
       run: |
         export KTD_HOME=$(pwd)/../koha-testing-docker
         ktd --name messagebee --shell --run "
@@ -76,7 +90,7 @@ jobs:
         "
 
     - name: Show logs on failure
-      if: ${{ failure() }}
+      if: ${{ failure() && steps.support_check.outputs.supported == 'true' }}
       run: |
         export KTD_HOME=$(pwd)/../koha-testing-docker
         echo "=== KTD instance status ==="
@@ -87,7 +101,7 @@ jobs:
         docker logs messagebee-koha-1 --tail 50 || true
 
     - name: Cleanup KTD instance
-      if: ${{ always() }}
+      if: ${{ always() && steps.support_check.outputs.supported == 'true' }}
       run: |
         export KTD_HOME=$(pwd)/../koha-testing-docker
         ktd --name messagebee down || true
