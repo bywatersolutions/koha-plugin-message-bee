@@ -12,8 +12,10 @@ use C4::Context;
 use C4::Log         qw(logaction);
 use Koha::DateUtils qw(dt_from_string);
 use Koha::Database;
-use Koha::Logger;
 use Koha::Encryption;
+use Koha::File::Transport::SFTP;
+use Koha::File::Transports;
+use Koha::Logger;
 
 use Data::Dumper;
 use DateTime;
@@ -30,7 +32,7 @@ use YAML::XS qw(Load);
 
 ## Here we set our plugin version
 our $VERSION         = "{VERSION}";
-our $MINIMUM_VERSION = "{MINIMUM_VERSION}";
+our $MINIMUM_VERSION = "25.11";
 
 our $metadata = {
     name            => 'Unique Management Services - MessageBee',
@@ -84,25 +86,19 @@ sub configure {
     unless ($cgi->param('save')) {
         my $template = $self->get_template({file => 'configure.tt'});
 
-        ## Grab the values we already have for our settings, if any exist
+        my $sftp_transports = Koha::File::Transports->search( { transport => 'sftp' }, { order_by => 'name' } );
+
         $template->param(
-            host                               => $self->retrieve_data('host'),
-            username                           => $self->retrieve_data('username'),
+            file_transport_id                  => $self->retrieve_data('file_transport_id'),
+            sftp_transports                    => $sftp_transports,
             archive_dir                        => $self->retrieve_data('archive_dir') || $default_archive_dir,
             skip_odue_if_other_if_sms_or_email => $self->retrieve_data('skip_odue_if_other_if_sms_or_email'),
         );
-        try {
-            $template->param(
-                password => Koha::Encryption->new->decrypt_hex( $self->retrieve_data('password') ),
-            );
-        };
 
         $self->output_html($template->output());
     } else {
         $self->store_data({
-            host                               => $cgi->param('host'),
-            username                           => $cgi->param('username'),
-            password => Koha::Encryption->new->encrypt_hex( $cgi->param('password') ),
+            file_transport_id                  => $cgi->param('file_transport_id') || undef,
             archive_dir                        => $cgi->param('archive_dir'),
             skip_odue_if_other_if_sms_or_email => $cgi->param('skip_odue_if_other_if_sms_or_email'),
         });
@@ -135,7 +131,49 @@ plugin is installed over an existing older version of a plugin
 sub upgrade {
     my ($self, $args) = @_;
 
+    $self->_migrate_sftp_to_file_transport;
+
     return 1;
+}
+
+=head3 _migrate_sftp_to_file_transport
+
+One-shot migration from the legacy plugin-config SFTP settings (host,
+username, password stored in plugin_data) to a Koha::File::Transport
+record. Runs on plugin upgrade. Idempotent, so re-running does nothing
+once the new file_transport_id is set.
+
+=cut
+
+sub _migrate_sftp_to_file_transport {
+    my ($self) = @_;
+
+    return if $self->retrieve_data('file_transport_id');
+
+    my $host                = $self->retrieve_data('host');
+    my $username            = $self->retrieve_data('username');
+    my $encrypted_password  = $self->retrieve_data('password');
+    return unless $host && $username && $encrypted_password;
+
+    my $plain_password = Koha::Encryption->new->decrypt_hex($encrypted_password);
+    my $upload_dir     = $ENV{MESSAGEBEE_SFTP_DIR} || 'cust2unique';
+
+    my $transport = Koha::File::Transport::SFTP->new(
+        {
+            name             => 'MessageBee',
+            transport        => 'sftp',
+            host             => $host,
+            port             => 22,
+            user_name        => $username,
+            password         => $plain_password,
+            auth_mode        => 'password',
+            upload_directory => $upload_dir,
+        }
+    )->store;
+
+    $self->store_data({ file_transport_id => $transport->id });
+
+    return $transport;
 }
 
 =head3 uninstall
@@ -638,45 +676,40 @@ sub _upload_pending {
 
     return unless @files;
 
-    my $host      = $self->retrieve_data('host');
-    my $username  = $self->retrieve_data('username');
-    my $password  = Koha::Encryption->new->decrypt_hex( $self->retrieve_data('password') );
-    my $directory = $ENV{MESSAGEBEE_SFTP_DIR} || 'cust2unique';
+    my $file_transport_id = $self->retrieve_data('file_transport_id');
+    unless ($file_transport_id) {
+        $log->warn( "MSGBEE - no file_transport_id configured, " . scalar(@files) . " files remain in spool" );
+        return;
+    }
 
-    my $sftp;
-    try {
-        $sftp = Net::SFTP::Foreign->new(
-            host     => $host,
-            user     => $username,
-            port     => 22,
-            password => $password,
-            timeout  => 5,
-            more     => [
-                -o => 'ConnectTimeout=3',
-                -o => 'ServerAliveInterval=3',
-                -o => 'ServerAliveCountMax=2',
-                -o => 'BatchMode=yes',
-            ],
+    my $transport = Koha::File::Transports->find($file_transport_id);
+    unless ($transport) {
+        $log->warn(
+            "MSGBEE - file_transport_id $file_transport_id no longer exists, " . scalar(@files) . " files remain in spool"
         );
-        $sftp->die_on_error("Unable to establish SFTP connection");
-        $sftp->setcwd($directory) or die "unable to change cwd: " . $sftp->error;
-    } catch {
-        $log->warn( "MSGBEE - SFTP connect failed: $_  -- " . scalar(@files) . " files remain in spool" );
-        $sftp = undef;
-    };
+        return;
+    }
 
-    return unless $sftp;
+    my $connected;
+    try { $connected = $transport->connect } catch { $log->warn("MSGBEE - SFTP connect threw: $_") };
+    unless ($connected) {
+        $log->warn( "MSGBEE - SFTP connect failed, " . scalar(@files) . " files remain in spool" );
+        return;
+    }
 
     for my $f (@files) {
         my $path = "$pending_dir/$f";
         try {
-            $sftp->put( $path, $f ) or die "put failed: " . $sftp->error;
+            $transport->upload_file( $path, $f )
+                or die "upload_file failed";
             unlink $path or die "unlink $path failed: $!";
             $log->info("MSGBEE - uploaded $f");
         } catch {
-            $log->warn("MSGBEE - failed to upload $f: $_  -- left in spool");
+            $log->warn("MSGBEE - failed to upload $f, left in spool. $_");
         };
     }
+
+    $transport->disconnect;
 }
 
 sub _async_upload {
