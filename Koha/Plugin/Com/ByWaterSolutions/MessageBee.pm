@@ -697,6 +697,20 @@ sub _upload_pending {
         return;
     }
 
+    # Upload into the configured directory, not the login directory
+    my $upload_directory = $transport->upload_directory;
+    if ($upload_directory) {
+        unless ( $transport->change_directory($upload_directory) ) {
+            $log->warn(
+                "MSGBEE - could not change to upload directory '$upload_directory', "
+                    . scalar(@files)
+                    . " files remain in spool"
+            );
+            $transport->disconnect;
+            return;
+        }
+    }
+
     for my $f (@files) {
         my $path = "$pending_dir/$f";
         try {

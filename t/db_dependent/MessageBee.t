@@ -721,7 +721,7 @@ subtest 'real SFTP transport: end-to-end upload to a live server' => sub {
         'set MESSAGEBEE_TEST_SFTP_{HOST,USER,PASSWORD} (and optionally _PORT, _DIR) to run the live upload test'
         unless $ENV{MESSAGEBEE_TEST_SFTP_HOST};
 
-    plan tests => 1;
+    plan tests => 3;
     $schema->storage->txn_begin;
 
     my $transport = _new_transport(
@@ -734,13 +734,23 @@ subtest 'real SFTP transport: end-to-end upload to a live server' => sub {
     my $plugin = _new_plugin( transport => $transport );
 
     my $pending_dir = tempdir( CLEANUP => 1 );
-    write_file( "$pending_dir/msgbee-live-test.json", '{"messages":[]}' );
+    my $payload     = '{"messages":[]}';
+    write_file( "$pending_dir/msgbee-live-test.json", $payload );
 
-    # Real connect + real put + real unlink. The spool file is only removed
-    # when the upload actually succeeds, so that is our success signal.
+    # Real connect + change into upload_directory + put + unlink. The spool
+    # file is only removed when the upload actually succeeds.
     $plugin->_upload_pending( $pending_dir, $pending_dir, _new_logger() );
 
     ok( !-e "$pending_dir/msgbee-live-test.json", 'spool file removed after a real upload' );
+
+    # Pull the file back from the upload_directory to prove it landed there.
+    ok( $transport->connect, 'reconnect to the server' );
+    $transport->change_directory( $transport->upload_directory );
+    my $roundtrip = "$pending_dir/roundtrip.json";
+    $transport->download_file( 'msgbee-live-test.json', $roundtrip );
+    $transport->disconnect;
+    is( ( -e $roundtrip ? read_file($roundtrip) : '' ), $payload,
+        'file is present in the upload_directory with the expected content' );
 
     $schema->storage->txn_rollback;
 };
