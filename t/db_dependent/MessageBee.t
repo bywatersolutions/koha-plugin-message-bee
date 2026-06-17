@@ -17,11 +17,12 @@
 
 use Modern::Perl;
 
-use Test::More tests => 11;
+use Test::More tests => 15;
 use Test::MockModule;
 
 use File::Slurp qw( read_file write_file );
 use File::Temp  qw( tempdir );
+use JSON        qw( decode_json );
 
 use Koha::Database;
 use Koha::Encryption;
@@ -442,6 +443,237 @@ subtest 'upgrade migrates legacy host, username, and password into a Koha::File:
     # Re-running upgrade should not create a second transport.
     $plugin->upgrade;
     is( $plugin->retrieve_data('file_transport_id'), $id, 'upgrade is idempotent' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'payload parity: checkout notice emits the documented json_structure_version 3 shape' => sub {
+    plan tests => 19;
+    $schema->storage->txn_begin;
+
+    my $archive_dir = tempdir( CLEANUP => 1 );
+    my $plugin      = _new_plugin( archive_dir => $archive_dir );
+
+    no warnings 'redefine';
+    local *Koha::Plugin::Com::ByWaterSolutions::MessageBee::_upload_pending = sub { };
+    local *Koha::Plugin::Com::ByWaterSolutions::MessageBee::_async_upload   = sub { };
+
+    # A realistic checkout fixture: patron + item (biblio, biblioitem,
+    # itemtype) + the issue linking them. This drives the same data
+    # assembly path 3.x used, so the emitted JSON is the cross-version
+    # contract this test pins.
+    my $patron   = $builder->build_object( { class => 'Koha::Patrons' } );
+    my $item     = $builder->build_sample_item;
+    my $checkout = $builder->build_object(
+        {
+            class => 'Koha::Checkouts',
+            value => {
+                borrowernumber => $patron->borrowernumber,
+                itemnumber     => $item->itemnumber,
+            },
+        }
+    );
+
+    my $msg = $builder->build_object(
+        {
+            class => 'Koha::Notice::Messages',
+            value => {
+                status                 => 'pending',
+                content                => "messagebee: yes\ncheckout: " . $checkout->issue_id . "\n",
+                message_transport_type => 'email',
+                letter_code            => 'MBTEST',
+            },
+        }
+    );
+
+    local $0 = '/some/cgi-script.pl';
+    $plugin->before_send_messages( { message_id => $msg->message_id, type => ['email'] } );
+
+    my @pending = glob("$archive_dir/pending/*.json");
+    is( scalar @pending, 1, 'one payload written to the spool' );
+
+    my $payload = decode_json( read_file( $pending[0] ) );
+
+    # Top-level envelope MessageBee depends on.
+    is( $payload->{json_structure_version}, '3',     'json_structure_version is 3' );
+    ok( $payload->{messagebee_plugin_version}, 'messagebee_plugin_version is present' );
+    is( ref $payload->{messages}, 'ARRAY', 'messages is an array' );
+    is( scalar @{ $payload->{messages} }, 1, 'exactly one message in the batch' );
+
+    my $m = $payload->{messages}->[0];
+
+    # Patron block: present, scrubbed, with the derived account_balance.
+    is( $m->{patron}->{borrowernumber}, $patron->borrowernumber, 'patron borrowernumber matches' );
+    ok( !exists $m->{patron}->{password},       'patron password scrubbed out' );
+    ok( !exists $m->{patron}->{borrowernotes},  'patron borrowernotes scrubbed out' );
+    ok( exists $m->{patron}->{account_balance}, 'patron account_balance added' );
+
+    # Message block: present and scrubbed.
+    is( $m->{message}->{letter_code}, 'MBTEST', 'message letter_code preserved' );
+    ok( !exists $m->{message}->{content},  'message content scrubbed out' );
+    ok( !exists $m->{message}->{metadata}, 'message metadata scrubbed out' );
+
+    # Issuing library.
+    ok( $m->{library}->{branchcode}, 'issuing library present' );
+
+    # Checkout sub-structure with its nested item/biblio entities.
+    is( ref $m->{checkouts}, 'ARRAY', 'checkouts is an array' );
+    is( scalar @{ $m->{checkouts} }, 1, 'one checkout in the payload' );
+
+    my $co = $m->{checkouts}->[0];
+    is( $co->{checkout}->{issue_id}, $checkout->issue_id, 'checkout issue_id matches' );
+    is( $co->{item}->{itemnumber},   $item->itemnumber,   'item itemnumber matches' );
+    ok( !exists $co->{biblio}->{abstract},     'biblio abstract scrubbed out' );
+    ok( $co->{biblioitem} && $co->{itemtype}, 'biblioitem and itemtype present' );
+
+    $schema->storage->txn_rollback;
+};
+
+# Read back the single payload the plugin spools for a notice whose YAML
+# content is $content, running in plain request context (uploads stubbed).
+sub _payload_for {
+    my ( $plugin, $archive_dir, $content ) = @_;
+
+    no warnings 'redefine';
+    local *Koha::Plugin::Com::ByWaterSolutions::MessageBee::_upload_pending = sub { };
+    local *Koha::Plugin::Com::ByWaterSolutions::MessageBee::_async_upload   = sub { };
+
+    my $msg = $builder->build_object(
+        {
+            class => 'Koha::Notice::Messages',
+            value => {
+                status                 => 'pending',
+                content                => $content,
+                message_transport_type => 'email',
+                letter_code            => 'MBTEST',
+            },
+        }
+    );
+
+    local $0 = '/some/cgi-script.pl';
+    $plugin->before_send_messages( { message_id => $msg->message_id, type => ['email'] } );
+
+    my @pending = glob("$archive_dir/pending/*.json");
+    return ( decode_json( read_file( $pending[0] ) ), scalar @pending );
+}
+
+subtest 'payload parity: single hold notice (hold:) emits a holds array entry' => sub {
+    plan tests => 9;
+    $schema->storage->txn_begin;
+
+    my $archive_dir = tempdir( CLEANUP => 1 );
+    my $plugin      = _new_plugin( archive_dir => $archive_dir );
+
+    my $patron = $builder->build_object( { class => 'Koha::Patrons' } );
+    my $item   = $builder->build_sample_item;
+    my $hold   = $builder->build_object(
+        {
+            class => 'Koha::Holds',
+            value => {
+                borrowernumber => $patron->borrowernumber,
+                biblionumber   => $item->biblionumber,
+                itemnumber     => $item->itemnumber,
+            },
+        }
+    );
+
+    my ( $payload, $count ) = _payload_for( $plugin, $archive_dir, "messagebee: yes\nhold: " . $hold->reserve_id . "\n" );
+    is( $count, 1, 'one payload written to the spool' );
+
+    my $h = $payload->{messages}->[0]->{holds};
+    is( ref $h, 'ARRAY', 'holds is an array' );
+    is( scalar @{$h}, 1, 'one hold in the payload' );
+
+    my $sub = $h->[0];
+    is( $sub->{hold}->{reserve_id},        $hold->reserve_id, 'hold reserve_id matches' );
+    ok( $sub->{pickup_library}->{branchcode}, 'pickup_library present' );
+    ok( !exists $sub->{biblio}->{abstract},   'biblio abstract scrubbed out' );
+    ok( $sub->{biblioitem},                   'biblioitem present' );
+    is( $sub->{item}->{itemnumber}, $item->itemnumber, 'item itemnumber matches' );
+    ok( $sub->{itemtype}, 'itemtype present' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'payload parity: multi-hold notice (holds:) emits one entry per id' => sub {
+    plan tests => 6;
+    $schema->storage->txn_begin;
+
+    my $archive_dir = tempdir( CLEANUP => 1 );
+    my $plugin      = _new_plugin( archive_dir => $archive_dir );
+
+    my $patron = $builder->build_object( { class => 'Koha::Patrons' } );
+    my @holds;
+    for ( 1 .. 2 ) {
+        my $item = $builder->build_sample_item;
+        push @holds, $builder->build_object(
+            {
+                class => 'Koha::Holds',
+                value => {
+                    borrowernumber => $patron->borrowernumber,
+                    biblionumber   => $item->biblionumber,
+                    itemnumber     => $item->itemnumber,
+                },
+            }
+        );
+    }
+    my $ids = join( ',', map { $_->reserve_id } @holds );
+
+    my ( $payload, $count ) = _payload_for( $plugin, $archive_dir, "messagebee: yes\nholds: $ids\n" );
+    is( $count, 1, 'one payload written to the spool' );
+
+    my $h = $payload->{messages}->[0]->{holds};
+    is( ref $h, 'ARRAY', 'holds is an array' );
+    is( scalar @{$h}, 2, 'two holds in the payload' );
+
+    is_deeply(
+        [ sort map { $_->{hold}->{reserve_id} } @{$h} ],
+        [ sort map { $_->reserve_id } @holds ],
+        'both reserve_ids present'
+    );
+    ok( ( !grep { exists $_->{biblio}->{abstract} } @{$h} ), 'no biblio abstract in any entry' );
+    ok( ( !grep { !$_->{item} || !$_->{itemtype} } @{$h} ),  'every entry has item and itemtype' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'payload parity: old_hold notice keeps its (quirky) nested holds structure' => sub {
+    plan tests => 7;
+    $schema->storage->txn_begin;
+
+    my $archive_dir = tempdir( CLEANUP => 1 );
+    my $plugin      = _new_plugin( archive_dir => $archive_dir );
+
+    my $patron = $builder->build_object( { class => 'Koha::Patrons' } );
+    my $item   = $builder->build_sample_item;
+    my $hold   = $builder->build_object(
+        {
+            class => 'Koha::Old::Holds',
+            value => {
+                borrowernumber => $patron->borrowernumber,
+                biblionumber   => $item->biblionumber,
+                itemnumber     => $item->itemnumber,
+            },
+        }
+    );
+
+    my ( $payload, $count ) =
+        _payload_for( $plugin, $archive_dir, "messagebee: yes\nold_hold: " . $hold->reserve_id . "\n" );
+    is( $count, 1, 'one payload written to the spool' );
+
+    my $h = $payload->{messages}->[0]->{holds};
+    is( ref $h, 'ARRAY', 'holds is an array' );
+    is( scalar @{$h}, 1, 'one entry in the payload' );
+
+    my $sub = $h->[0];
+
+    # NOTE: old_hold nests the hold under a 'holds' array key, unlike the
+    # 'hold'/'holds' branches which use a singular 'hold' key. Pinning the
+    # actual 3.x behaviour here so any change to it is caught.
+    is( ref $sub->{holds}, 'ARRAY', 'old_hold nests the row under a holds array key' );
+    is( $sub->{holds}->[0]->{reserve_id}, $hold->reserve_id, 'old hold reserve_id matches' );
+    ok( $sub->{pickup_library},             'pickup_library present' );
+    ok( !exists $sub->{biblio}->{abstract}, 'biblio abstract scrubbed out' );
 
     $schema->storage->txn_rollback;
 };
