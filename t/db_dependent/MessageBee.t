@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 15;
+use Test::More tests => 18;
 use Test::MockModule;
 
 use File::Slurp qw( read_file write_file );
@@ -676,4 +676,108 @@ subtest 'payload parity: old_hold notice keeps its (quirky) nested holds structu
     ok( !exists $sub->{biblio}->{abstract}, 'biblio abstract scrubbed out' );
 
     $schema->storage->txn_rollback;
+};
+
+# Poll until $predicate is true or $timeout seconds elapse. Used to wait on
+# work done by a detached child process.
+sub _wait_for {
+    my ( $predicate, $timeout ) = @_;
+    $timeout //= 15;
+    my $deadline = time + $timeout;
+    until ( $predicate->() ) {
+        return 0 if time > $deadline;
+        select( undef, undef, undef, 0.1 );
+    }
+    return 1;
+}
+
+subtest 'real SFTP transport: connect failure leaves files in the spool (no socket mock)' => sub {
+    plan tests => 2;
+    $schema->storage->txn_begin;
+
+    # A genuine Koha::File::Transport::SFTP pointed at a closed local port.
+    # Net::SFTP::Foreign really attempts the connection (nothing is mocked)
+    # and fails fast with connection refused.
+    my $transport = _new_transport( host => '127.0.0.1', port => 1 );
+    my $plugin    = _new_plugin( transport => $transport );
+
+    my $pending_dir = tempdir( CLEANUP => 1 );
+    write_file( "$pending_dir/queued.json", '{"messages":[]}' );
+
+    ok( !$transport->connect, 'real connect to a dead endpoint returns falsy' );
+
+    $plugin->_upload_pending( $pending_dir, $pending_dir, _new_logger() );
+    ok( -e "$pending_dir/queued.json", 'file left in spool after a real connect failure' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'real SFTP transport: end-to-end upload to a live server' => sub {
+
+    # This is the only path that needs a real SFTP server, so it is opt-in.
+    # Point it at a throwaway endpoint to exercise connect + put + unlink
+    # with nothing mocked.
+    plan skip_all =>
+        'set MESSAGEBEE_TEST_SFTP_{HOST,USER,PASSWORD} (and optionally _PORT, _DIR) to run the live upload test'
+        unless $ENV{MESSAGEBEE_TEST_SFTP_HOST};
+
+    plan tests => 1;
+    $schema->storage->txn_begin;
+
+    my $transport = _new_transport(
+        host             => $ENV{MESSAGEBEE_TEST_SFTP_HOST},
+        port             => $ENV{MESSAGEBEE_TEST_SFTP_PORT} || 22,
+        user_name        => $ENV{MESSAGEBEE_TEST_SFTP_USER},
+        password         => $ENV{MESSAGEBEE_TEST_SFTP_PASSWORD},
+        upload_directory => $ENV{MESSAGEBEE_TEST_SFTP_DIR} || '.',
+    );
+    my $plugin = _new_plugin( transport => $transport );
+
+    my $pending_dir = tempdir( CLEANUP => 1 );
+    write_file( "$pending_dir/msgbee-live-test.json", '{"messages":[]}' );
+
+    # Real connect + real put + real unlink. The spool file is only removed
+    # when the upload actually succeeds, so that is our success signal.
+    $plugin->_upload_pending( $pending_dir, $pending_dir, _new_logger() );
+
+    ok( !-e "$pending_dir/msgbee-live-test.json", 'spool file removed after a real upload' );
+
+    $schema->storage->txn_rollback;
+};
+
+# Kept last: _async_upload's detached grandchild disconnects the shared DB
+# handle, so this test stays out of a transaction and asserts only on the
+# filesystem, where the dropped connection can't affect earlier subtests.
+subtest '_async_upload forks a detached child that drains the spool' => sub {
+    plan tests => 2;
+
+    my $archive_dir = tempdir( CLEANUP => 1 );
+    my $pending_dir = "$archive_dir/pending";
+    mkdir $pending_dir or die "mkdir $pending_dir: $!";
+    write_file( "$pending_dir/queued.json", '{"messages":[]}' );
+
+    my $plugin = Koha::Plugin::Com::ByWaterSolutions::MessageBee->new( { enable_plugins => 1 } );
+
+    # Let the real fork / setsid / double-fork run; stub only the worker so
+    # the detached child does observable, DB-free work.
+    no warnings 'redefine';
+    local *Koha::Plugin::Com::ByWaterSolutions::MessageBee::_upload_pending = sub {
+        my ( $self, $pd, $ad, $log ) = @_;
+        opendir my $dh, $pd or return;
+        my @files = grep { /\.json$/ } readdir $dh;
+        closedir $dh;
+        unlink "$pd/$_" for @files;
+        write_file( "$ad/.async_ran", "ok" );
+    };
+
+    $plugin->_async_upload( $pending_dir, $archive_dir, _new_logger() );
+
+    my $ran = _wait_for( sub { -e "$archive_dir/.async_ran" } );
+
+    # The grandchild has finished (it writes the sentinel after disconnecting
+    # the shared handle); drop our side so global teardown reconnects cleanly.
+    eval { Koha::Database->schema->storage->disconnect };
+
+    ok( $ran, 'detached child executed the upload worker' );
+    ok( !-e "$pending_dir/queued.json", 'detached child drained the spool file' );
 };
