@@ -156,7 +156,6 @@ sub _migrate_sftp_to_file_transport {
     return unless $host && $username && $encrypted_password;
 
     my $plain_password = Koha::Encryption->new->decrypt_hex($encrypted_password);
-    my $upload_dir     = $ENV{MESSAGEBEE_SFTP_DIR} || 'cust2unique';
 
     my $transport = Koha::File::Transport::SFTP->new(
         {
@@ -167,7 +166,7 @@ sub _migrate_sftp_to_file_transport {
             user_name        => $username,
             password         => $plain_password,
             auth_mode        => 'password',
-            upload_directory => $upload_dir,
+            upload_directory => 'cust2unique',
         }
     )->store;
 

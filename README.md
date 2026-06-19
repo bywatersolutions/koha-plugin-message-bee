@@ -14,11 +14,18 @@ This plugin requires no special installation, but will require acceptance of the
 
 # Configuration
 
+## SFTP connection
+
+As of version 4.0 the SFTP connection to MessageBee is configured as a Koha **file transport** (Administration &gt; File transports), not through the plugin itself. Create an SFTP file transport with UMS's host, username, and password, set its upload directory (`cust2unique` unless UMS tells you otherwise), then open the plugin's configuration page and select that transport.
+
+When you upgrade from an older (3.x) version, the plugin automatically migrates the host, username, and password it used to store into a new file transport, with the upload directory set to `cust2unique`. If MessageBee gave you a different directory, change it on the file transport after upgrading.
+
+## Environment variables
+
 There are a number of environment variables that can be set to change the behavior of the MessageBee plugin:
 * MESSAGEBEE_ARCHIVE_PATH - If this is set to a directory, a copy of the file uploaded to UMS will be stored here. The directory is best created in /var/lib/koha/<instance>/messagebee_archive
 * MESSAGEBEE_TEST_MODE - If MESSAGEBEE_TEST_MODE is set to 1, the JSON file will be generated but messages in the queue will not be updated
 * MESSAGEBEE_VERBOSE - If MESSAGEBEE_VERBOSE is set to 1, the plugin will output extra info when process_message_queue.pl is run
-* MESSAGEBEE_SFTP_DIR - If MESSAGEBEE_SFTP_DIR is set to a path, that path will be used on the remote SFTP server instead of the default `cust2unique`
 
 
 
