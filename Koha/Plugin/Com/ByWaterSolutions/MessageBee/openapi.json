@@ -58,7 +58,7 @@
   "/message/{message_id}/content":{
     "post":{
       "x-mojo-to":"Com::ByWaterSolutions::MessageBee::API#update_message_content",
-      "operationId":"updateMessageContent",
+      "operationId":"updateMessageContentMessageBee",
       "tags":[
         "messages"
       ],
