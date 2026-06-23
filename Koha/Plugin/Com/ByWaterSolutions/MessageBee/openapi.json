@@ -2,7 +2,7 @@
   "/message/{message_id}/status":{
     "post":{
       "x-mojo-to":"Com::ByWaterSolutions::MessageBee::API#update_message_status",
-      "operationId":"updateMessageStatus",
+      "operationId":"updateMessageStatusMessageBee",
       "tags":[
         "messages"
       ],
