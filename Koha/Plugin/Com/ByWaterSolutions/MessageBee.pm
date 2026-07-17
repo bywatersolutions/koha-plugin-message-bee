@@ -155,7 +155,13 @@ sub _migrate_sftp_to_file_transport {
     my $encrypted_password  = $self->retrieve_data('password');
     return unless $host && $username && $encrypted_password;
 
-    my $plain_password = Koha::Encryption->new->decrypt_hex($encrypted_password);
+    # Old versions of this plugin stored the password in plain text.
+    # If decryption fails, assume the stored value is one of those.
+    my $plain_password = try {
+        Koha::Encryption->new->decrypt_hex($encrypted_password);
+    } catch {
+        $encrypted_password;
+    };
 
     my $transport = Koha::File::Transport::SFTP->new(
         {
