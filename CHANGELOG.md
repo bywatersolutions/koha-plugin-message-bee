@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [4.1.4] - 2026-10-15
+
 ### Fixed
 - The "skip overdue phone notices for patrons with an sms number or email address" option now works. It never skipped anything, so patrons with an email address or sms number were also called about their overdues.
 - Overdue letter codes are now read from the circulation rules on Koha 26.06 and later, where Bug 10190 removed the overduerules table. Until now the plugin died on every run there.
@@ -20,4 +23,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial commit!
 
-[Unreleased]: https://github.com/bywatersolutions/koha-plugin-message-bee/compare/v4.1.3...HEAD
+[Unreleased]: https://github.com/bywatersolutions/koha-plugin-message-bee/compare/v4.1.4...HEAD
+[4.1.4]: https://github.com/bywatersolutions/koha-plugin-message-bee/compare/v4.1.3...v4.1.4
