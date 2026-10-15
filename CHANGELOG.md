@@ -19,3 +19,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.0.1] - 2021-06-30
 ### Added
 - Initial commit!
+
+[Unreleased]: https://github.com/bywatersolutions/koha-plugin-message-bee/compare/v4.1.3...HEAD

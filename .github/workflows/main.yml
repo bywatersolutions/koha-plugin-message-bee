@@ -195,6 +195,23 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  changelog:
+    name: Update changelog
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: release
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: main
+
+    - name: Move the Unreleased changelog entries under this release
+      uses: bywatersolutions/github-action-keepachangelog-release@v1
+      with:
+        release-tag: ${{ github.ref_name }}
+
   keepalive:
     name: Keep Alive
     runs-on: ubuntu-latest
