@@ -410,7 +410,7 @@ subtest 'messages without a messagebee: yes tag are excluded from the batch' => 
 };
 
 subtest 'skip_odue_if_other_if_sms_or_email drops phone overdues for patrons with an email or sms number' => sub {
-    plan tests => 4;
+    plan tests => 5;
     $schema->storage->txn_begin;
 
     my $archive_dir = tempdir( CLEANUP => 1 );
@@ -467,6 +467,10 @@ subtest 'skip_odue_if_other_if_sms_or_email drops phone overdues for patrons wit
 
     $_->discard_changes for @messages;
     is( $messages[0]->status, 'deleted', 'overdue for the patron with an email address is skipped' );
+    like(
+        $messages[0]->failure_code, qr/overdue phone notice skipped/,
+        'skipped message records why it was skipped'
+    );
     is( $messages[1]->status, 'sent',    'overdue for the phone-only patron is sent' );
 
     my @pending = glob("$archive_dir/pending/*.json");
