@@ -24,6 +24,8 @@ use File::Slurp qw( read_file write_file );
 use File::Temp  qw( tempdir );
 use JSON        qw( decode_json );
 
+use C4::Context;
+use Koha::CirculationRules;
 use Koha::Database;
 use Koha::Encryption;
 use Koha::File::Transport::SFTP;
@@ -421,8 +423,23 @@ subtest 'skip_odue_if_other_if_sms_or_email drops phone overdues for patrons wit
     local *Koha::Plugin::Com::ByWaterSolutions::MessageBee::_upload_pending = sub { };
     local *Koha::Plugin::Com::ByWaterSolutions::MessageBee::_async_upload   = sub { };
 
-    # The skip only applies to letter codes that appear in overduerules
-    $builder->build( { source => 'Overduerule', value => { letter1 => 'MBODUE' } } );
+    # The skip only applies to letter codes found in the overdue rules, which live in circulation_rules since Koha 26.06
+    if ( C4::Context->preference('Version') >= 26.0600022 ) {
+        $builder->build_object(
+            {
+                class => 'Koha::CirculationRules',
+                value => {
+                    branchcode   => undef,
+                    categorycode => undef,
+                    itemtype     => undef,
+                    rule_name    => 'overdue_1_notice',
+                    rule_value   => 'MBODUE',
+                },
+            }
+        );
+    } else {
+        $builder->build( { source => 'Overduerule', value => { letter1 => 'MBODUE' } } );
+    }
 
     my $with_email = $builder->build_object(
         {

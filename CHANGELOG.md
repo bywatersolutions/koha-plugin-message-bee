@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Fixed
 - The "skip overdue phone notices for patrons with an sms number or email address" option now works. It never skipped anything, so patrons with an email address or sms number were also called about their overdues.
+- Overdue letter codes are now read from the circulation rules on Koha 26.06 and later, where Bug 10190 removed the overduerules table. Until now the plugin died on every run there.
 
 ## [3.1.0] - 2022-05-19
 - Add patron/account_balance to the JSON data

@@ -10,6 +10,7 @@ use base qw(Koha::Plugins::Base);
 use C4::Auth;
 use C4::Context;
 use C4::Log         qw(logaction);
+use Koha::CirculationRules;
 use Koha::DateUtils qw(dt_from_string);
 use Koha::Database;
 use Koha::Encryption;
@@ -323,11 +324,11 @@ sub before_send_messages {
     my $messages_generated = 0;
 
     my $skip_odue_if_other_if_sms_or_email = $self->retrieve_data('skip_odue_if_other_if_sms_or_email');
-    my $dbh                                = C4::Context->dbh;
-    my $letter1                            = $dbh->selectcol_arrayref(q{SELECT DISTINCT(letter1) FROM overduerules});
-    my $letter2                            = $dbh->selectcol_arrayref(q{SELECT DISTINCT(letter2) FROM overduerules});
-    my $letter3                            = $dbh->selectcol_arrayref(q{SELECT DISTINCT(letter3) FROM overduerules});
-    my @odue_letter_codes                  = (@$letter1, @$letter2, @$letter3);
+    # Bug 10190 (Koha 26.06.00.022) moved the overdue notice letters from overduerules into circulation_rules
+    my @odue_letter_codes =
+        C4::Context->preference('Version') >= 26.0600022
+        ? Koha::CirculationRules->search( { rule_name => { -like => 'overdue_%_notice' } } )->get_column('rule_value')
+        : map { @{ C4::Context->dbh->selectcol_arrayref("SELECT DISTINCT($_) FROM overduerules") } } qw(letter1 letter2 letter3);
 
     while (1) {
         my @messages = Koha::Notice::Messages->search($search_params, $other_params)->as_list;
