@@ -576,7 +576,7 @@ sub before_send_messages {
              # If enabled, skip sending if this is an overdue notice *and* the patron has an sms number or email address
                         if (   $m->message_transport_type eq 'phone'
                             && $skip_odue_if_other_if_sms_or_email
-                            && any { $m->{letter_code} eq $_ } @odue_letter_codes)
+                            && any { $m->letter_code eq $_ } @odue_letter_codes)
                         {
                             my $skip = $patron->notice_email_address || $patron->smsalertnumber;
 

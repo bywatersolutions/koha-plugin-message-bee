@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 18;
+use Test::More tests => 19;
 use Test::MockModule;
 
 use File::Slurp qw( read_file write_file );
@@ -405,6 +405,77 @@ subtest 'messages without a messagebee: yes tag are excluded from the batch' => 
 
     my @pending = glob("$archive_dir/pending/*.json");
     is( scalar @pending, 1, 'only one batch file queued' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'skip_odue_if_other_if_sms_or_email drops phone overdues for patrons with an email or sms number' => sub {
+    plan tests => 4;
+    $schema->storage->txn_begin;
+
+    my $archive_dir = tempdir( CLEANUP => 1 );
+    my $plugin      = _new_plugin( archive_dir => $archive_dir );
+    $plugin->store_data( { skip_odue_if_other_if_sms_or_email => 1 } );
+
+    no warnings 'redefine';
+    local *Koha::Plugin::Com::ByWaterSolutions::MessageBee::_upload_pending = sub { };
+    local *Koha::Plugin::Com::ByWaterSolutions::MessageBee::_async_upload   = sub { };
+
+    # The skip only applies to letter codes that appear in overduerules
+    $builder->build( { source => 'Overduerule', value => { letter1 => 'MBODUE' } } );
+
+    my $with_email = $builder->build_object(
+        {
+            class => 'Koha::Patrons',
+            value => { email => 'patron@example.com', smsalertnumber => undef },
+        }
+    );
+    my $phone_only = $builder->build_object(
+        {
+            class => 'Koha::Patrons',
+            value => { email => undef, emailpro => undef, B_email => undef, smsalertnumber => undef },
+        }
+    );
+
+    my @messages;
+    for my $patron ( $with_email, $phone_only ) {
+        my $checkout = $builder->build_object(
+            {
+                class => 'Koha::Checkouts',
+                value => {
+                    borrowernumber => $patron->borrowernumber,
+                    itemnumber     => $builder->build_sample_item->itemnumber,
+                },
+            }
+        );
+        push @messages, $builder->build_object(
+            {
+                class => 'Koha::Notice::Messages',
+                value => {
+                    borrowernumber         => $patron->borrowernumber,
+                    status                 => 'pending',
+                    content                => "messagebee: yes\ncheckouts: " . $checkout->issue_id . ",\n",
+                    message_transport_type => 'phone',
+                    letter_code            => 'MBODUE',
+                },
+            }
+        );
+    }
+
+    local $0 = '/some/cgi-script.pl';
+    $plugin->before_send_messages( { type => ['phone'], letter_code => ['MBODUE'] } );
+
+    $_->discard_changes for @messages;
+    is( $messages[0]->status, 'deleted', 'overdue for the patron with an email address is skipped' );
+    is( $messages[1]->status, 'sent',    'overdue for the phone-only patron is sent' );
+
+    my @pending = glob("$archive_dir/pending/*.json");
+    my $payload = decode_json( read_file( $pending[0] ) );
+    is( scalar @{ $payload->{messages} }, 1, 'only the unskipped message is in the payload' );
+    is(
+        $payload->{messages}->[0]->{patron}->{borrowernumber},
+        $phone_only->borrowernumber, 'payload carries the phone-only patron'
+    );
 
     $schema->storage->txn_rollback;
 };
