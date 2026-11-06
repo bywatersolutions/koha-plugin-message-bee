@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 23;
+use Test::More tests => 24;
 use Test::MockModule;
 
 use File::Slurp qw( read_file write_file );
@@ -947,6 +947,51 @@ subtest 'payload parity: account receipt notice (credit:) emits a credits array 
     is( $o->{debit_type}->{code},       'OVERDUE',               'debit type included' );
     is( $o->{item}->{itemnumber},       $item->itemnumber,       'item for the debit included' );
     ok( !exists $o->{biblio}->{abstract}, 'biblio abstract scrubbed out' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'payload parity: recall notice (recall:) emits a recalls array entry' => sub {
+    plan tests => 10;
+    $schema->storage->txn_begin;
+
+    my $archive_dir = tempdir( CLEANUP => 1 );
+    my $plugin      = _new_plugin( archive_dir => $archive_dir );
+
+    my $patron  = $builder->build_object( { class => 'Koha::Patrons' } );
+    my $library = $builder->build_object( { class => 'Koha::Libraries' } );
+    my $item    = $builder->build_sample_item;
+    my $recall  = $builder->build_object(
+        {
+            class => 'Koha::Recalls',
+            value => {
+                patron_id         => $patron->borrowernumber,
+                biblio_id         => $item->biblionumber,
+                item_id           => $item->itemnumber,
+                pickup_library_id => $library->branchcode,
+                item_level        => 1,
+            },
+        }
+    );
+
+    my ( $payload, $count ) =
+        _payload_for( $plugin, $archive_dir, "messagebee: yes\nrecall: " . $recall->recall_id . "\n" );
+    is( $count, 1, 'one payload written to the spool' );
+
+    my $m = $payload->{messages}->[0];
+    is( $m->{patron}->{borrowernumber}, $patron->borrowernumber, 'patron filled in from the recall' );
+
+    my $r = $m->{recalls};
+    is( ref $r, 'ARRAY', 'recalls is an array' );
+    is( scalar @{$r}, 1, 'one recall in the payload' );
+
+    my $sub = $r->[0];
+    is( $sub->{recall}->{recall_id},          $recall->recall_id,   'recall id matches' );
+    is( $sub->{pickup_library}->{branchcode}, $library->branchcode, 'pickup library matches' );
+    is( $sub->{biblio}->{biblionumber},       $item->biblionumber,  'biblio matches' );
+    ok( !exists $sub->{biblio}->{abstract}, 'biblio abstract scrubbed out' );
+    is( $sub->{item}->{itemnumber}, $item->itemnumber, 'item matches' );
+    ok( $sub->{biblioitem} && $sub->{itemtype}, 'biblioitem and itemtype present' );
 
     $schema->storage->txn_rollback;
 };

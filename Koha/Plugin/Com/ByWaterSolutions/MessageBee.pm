@@ -19,6 +19,7 @@ use Koha::File::Transport::SFTP;
 use Koha::File::Transports;
 use Koha::ILL::Requests;
 use Koha::Logger;
+use Koha::Recalls;
 use Koha::Suggestions;
 
 use Data::Dumper;
@@ -625,6 +626,33 @@ sub before_send_messages {
                             }
 
                             $data->{credits} = [$subdata];
+                        }
+
+                        ## Handle 'recall'
+                        if ($yaml->{recall}) {
+                            my $recall = Koha::Recalls->find($yaml->{recall});
+                            die "Recall with id $yaml->{recall} not found\n" unless $recall;
+
+                            $patron //= $recall->patron;
+                            $data->{patron} //= $self->scrub_patron($patron->unblessed) if $patron;
+
+                            my $biblio = $recall->biblio;
+
+                            my $subdata;
+                            $subdata->{recall}     = $recall->unblessed;
+                            $subdata->{biblio}     = $self->scrub_biblio($biblio->unblessed);
+                            $subdata->{biblioitem} = $biblio->biblioitem->unblessed;
+
+                            if (my $library = $recall->library) {
+                                $subdata->{pickup_library} = $library->unblessed;
+                            }
+
+                            if (my $item = $recall->item) {
+                                $subdata->{item}     = $item->unblessed;
+                                $subdata->{itemtype} = $item->itemtype->unblessed;
+                            }
+
+                            $data->{recalls} = [$subdata];
                         }
 
                         ## Handle misc key/value pairs

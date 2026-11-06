@@ -46,6 +46,7 @@ Other keys you may use are:
 * `suggestion` - suggestions.suggestionid, auto-imports patron, library, biblio and biblioitem
 * `ill_request` - illrequests.illrequest_id, auto-imports patron, library, request attributes, biblio and biblioitem
 * `credit` - accountlines.accountlines_id of a payment or writeoff, auto-imports patron, library and the fees it paid off
+* `recall` - recalls.recall_id, auto-imports patron, pickup library, item, biblio and biblioitem
 
 Example notices:
 
@@ -240,4 +241,26 @@ ACCOUNT_WRITEOFF:
 messagebee: yes
 credit: [% credit.accountlines_id %]
 library: [% branch.id %]
+```
+
+PICKUP_RECALLED_ITEM:
+```
+---
+messagebee: yes
+recall: [% recall.recall_id %]
+library: [% recall.pickup_library_id %]
+#Title: [% biblio.title %]
+#Barcode: [% item.barcode %]
+```
+
+NOTE: RETURN_RECALLED_ITEM goes to the patron who has the item checked out, and Koha gives that notice the checkout rather than the recall, so use the `checkout` key there.
+
+RETURN_RECALLED_ITEM:
+```
+---
+messagebee: yes
+checkout: [% checkout.issue_id %]
+patron: [% borrower.borrowernumber %]
+#Title: [% biblio.title %]
+#Barcode: [% item.barcode %]
 ```
