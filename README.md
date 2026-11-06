@@ -139,6 +139,14 @@ patron: [% borrower.id %]
 #Barcode: [% hold.item.barcode %]
 ```
 
+HOLDPLACED_PATRON:
+```
+---
+messagebee: yes
+hold: [% hold.id %]
+#Title: [% hold.biblio.title %] [% hold.biblio.subtitle %]
+```
+
 NOTE: Predue notices require Koha bug 29100.
 
 PREDUE:
@@ -204,6 +212,15 @@ MEMBERSHIP_EXPIRY:
 messagebee: yes
 patron: [% borrower.borrowernumber %]
 #Expiration date: [% borrower.dateexpiry %]
+```
+
+MEMBERSHIP_RENEWED:
+```
+---
+messagebee: yes
+patron: [% borrower.borrowernumber %]
+library: [% branch.id %]
+#New expiration date: [% borrower.dateexpiry %]
 ```
 
 WELCOME:
