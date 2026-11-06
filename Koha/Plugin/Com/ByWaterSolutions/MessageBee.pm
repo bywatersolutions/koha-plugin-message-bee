@@ -16,6 +16,7 @@ use Koha::Database;
 use Koha::Encryption;
 use Koha::File::Transport::SFTP;
 use Koha::File::Transports;
+use Koha::ILL::Requests;
 use Koha::Logger;
 use Koha::Suggestions;
 
@@ -563,6 +564,29 @@ sub before_send_messages {
                             }
 
                             $data->{suggestions} = [$subdata];
+                        }
+
+                        ## Handle 'ill_request'
+                        if ($yaml->{ill_request}) {
+                            my $ill_request = Koha::ILL::Requests->find($yaml->{ill_request});
+                            die "ILL request with id $yaml->{ill_request} not found\n" unless $ill_request;
+
+                            $patron //= $ill_request->patron;
+                            $data->{patron} //= $self->scrub_patron($patron->unblessed) if $patron;
+
+                            my $subdata;
+                            $subdata->{ill_request} = $ill_request->unblessed;
+                            $subdata->{library}     = $ill_request->library->unblessed;
+
+                            my @attributes = $ill_request->extended_attributes->as_list;
+                            $subdata->{attributes} = {map { $_->type => $_->value } @attributes};
+
+                            if (my $biblio = $ill_request->biblio) {
+                                $subdata->{biblio}     = $self->scrub_biblio($biblio->unblessed);
+                                $subdata->{biblioitem} = $biblio->biblioitem->unblessed;
+                            }
+
+                            $data->{ill_requests} = [$subdata];
                         }
 
                         ## Handle misc key/value pairs

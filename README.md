@@ -44,6 +44,7 @@ Other keys you may use are:
 * `checkout` - issues.issue_id, auto-imports patron, library, item, biblio and biblioitem
 * `checkouts` - repeating comma delimited issues.issue_id
 * `suggestion` - suggestions.suggestionid, auto-imports patron, library, biblio and biblioitem
+* `ill_request` - illrequests.illrequest_id, auto-imports patron, library, request attributes, biblio and biblioitem
 
 Example notices:
 
@@ -217,4 +218,15 @@ messagebee: yes
 suggestion: [% suggestion.suggestionid %]
 library: [% branch.id %]
 #Title: [% suggestion.title %]
+```
+
+NOTE: The same template works for ILL_REQUEST_UNAVAIL and ILL_REQUEST_UPDATE.
+
+ILL_PICKUP_READY:
+```
+---
+messagebee: yes
+ill_request: [% illrequest.illrequest_id %]
+library: [% branch.id %]
+#Title: [% ill_bib_title %]
 ```

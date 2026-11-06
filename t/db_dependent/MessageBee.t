@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 21;
+use Test::More tests => 22;
 use Test::MockModule;
 
 use File::Slurp qw( read_file write_file );
@@ -808,6 +808,59 @@ subtest 'payload parity: suggestion notice (suggestion:) emits a suggestions arr
     is( $sub->{biblio}->{biblionumber},     $biblio->biblionumber,     'biblio matches' );
     ok( !exists $sub->{biblio}->{abstract}, 'biblio abstract scrubbed out' );
     ok( $sub->{biblioitem},                 'biblioitem present' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'payload parity: ILL request notice (ill_request:) emits an ill_requests array entry' => sub {
+    plan tests => 9;
+    $schema->storage->txn_begin;
+
+    my $archive_dir = tempdir( CLEANUP => 1 );
+    my $plugin      = _new_plugin( archive_dir => $archive_dir );
+
+    my $patron      = $builder->build_object( { class => 'Koha::Patrons' } );
+    my $library     = $builder->build_object( { class => 'Koha::Libraries' } );
+    my $biblio      = $builder->build_sample_biblio;
+    my $ill_request = $builder->build_object(
+        {
+            class => 'Koha::ILL::Requests',
+            value => {
+                borrowernumber => $patron->borrowernumber,
+                branchcode     => $library->branchcode,
+                biblio_id      => $biblio->biblionumber,
+                batch_id       => undef,
+            },
+        }
+    );
+    $builder->build_object(
+        {
+            class => 'Koha::ILL::Request::Attributes',
+            value => {
+                illrequest_id => $ill_request->illrequest_id,
+                type          => 'title',
+                value         => 'A requested title',
+            },
+        }
+    );
+
+    my ( $payload, $count ) =
+        _payload_for( $plugin, $archive_dir, "messagebee: yes\nill_request: " . $ill_request->illrequest_id . "\n" );
+    is( $count, 1, 'one payload written to the spool' );
+
+    my $m = $payload->{messages}->[0];
+    is( $m->{patron}->{borrowernumber}, $patron->borrowernumber, 'patron filled in from the request' );
+
+    my $r = $m->{ill_requests};
+    is( ref $r, 'ARRAY', 'ill_requests is an array' );
+    is( scalar @{$r}, 1, 'one ILL request in the payload' );
+
+    my $sub = $r->[0];
+    is( $sub->{ill_request}->{illrequest_id}, $ill_request->illrequest_id, 'ILL request id matches' );
+    is( $sub->{library}->{branchcode},        $library->branchcode,        'library matches' );
+    is( $sub->{attributes}->{title},          'A requested title',         'request attributes included' );
+    is( $sub->{biblio}->{biblionumber},       $biblio->biblionumber,       'biblio matches' );
+    ok( !exists $sub->{biblio}->{abstract}, 'biblio abstract scrubbed out' );
 
     $schema->storage->txn_rollback;
 };
