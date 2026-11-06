@@ -12,6 +12,7 @@ use C4::Context;
 use C4::Log         qw(logaction);
 use Koha::Account::Lines;
 use Koha::CirculationRules;
+use Koha::CurbsidePickups;
 use Koha::DateUtils qw(dt_from_string);
 use Koha::Database;
 use Koha::Encryption;
@@ -653,6 +654,21 @@ sub before_send_messages {
                             }
 
                             $data->{recalls} = [$subdata];
+                        }
+
+                        ## Handle 'curbside_pickup'
+                        if ($yaml->{curbside_pickup}) {
+                            my $curbside_pickup = Koha::CurbsidePickups->find($yaml->{curbside_pickup});
+                            die "Curbside pickup with id $yaml->{curbside_pickup} not found\n" unless $curbside_pickup;
+
+                            $patron //= $curbside_pickup->patron;
+                            $data->{patron} //= $self->scrub_patron($patron->unblessed) if $patron;
+
+                            my $subdata;
+                            $subdata->{curbside_pickup} = $curbside_pickup->unblessed;
+                            $subdata->{library}         = $curbside_pickup->library->unblessed;
+
+                            $data->{curbside_pickups} = [$subdata];
                         }
 
                         ## Handle misc key/value pairs

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Interlibrary loan notices to patrons (ILL_PICKUP_READY, ILL_REQUEST_UNAVAIL and ILL_REQUEST_UPDATE) can now be sent through MessageBee using the new `ill_request` template key.
 - Payment and writeoff receipts (ACCOUNT_PAYMENT and ACCOUNT_WRITEOFF) can now be sent through MessageBee using the new `credit` template key, along with the fees each one paid off.
 - Recall pickup notices (PICKUP_RECALLED_ITEM) can now be sent through MessageBee using the new `recall` template key.
+- Curbside pickup notices (NEW_CURBSIDE_PICKUP) can now be sent through MessageBee using the new `curbside_pickup` template key.
 
 ## [4.1.4] - 2026-10-15
 

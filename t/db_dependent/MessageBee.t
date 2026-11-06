@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 24;
+use Test::More tests => 25;
 use Test::MockModule;
 
 use File::Slurp qw( read_file write_file );
@@ -992,6 +992,60 @@ subtest 'payload parity: recall notice (recall:) emits a recalls array entry' =>
     ok( !exists $sub->{biblio}->{abstract}, 'biblio abstract scrubbed out' );
     is( $sub->{item}->{itemnumber}, $item->itemnumber, 'item matches' );
     ok( $sub->{biblioitem} && $sub->{itemtype}, 'biblioitem and itemtype present' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'payload parity: curbside pickup notice (curbside_pickup:) emits a curbside_pickups array entry' => sub {
+    plan tests => 8;
+    $schema->storage->txn_begin;
+
+    my $archive_dir = tempdir( CLEANUP => 1 );
+    my $plugin      = _new_plugin( archive_dir => $archive_dir );
+
+    my $patron          = $builder->build_object( { class => 'Koha::Patrons' } );
+    my $library         = $builder->build_object( { class => 'Koha::Libraries' } );
+    my $item            = $builder->build_sample_item;
+    my $curbside_pickup = $builder->build_object(
+        {
+            class => 'Koha::CurbsidePickups',
+            value => {
+                borrowernumber => $patron->borrowernumber,
+                branchcode     => $library->branchcode,
+            },
+        }
+    );
+    my $hold = $builder->build_object(
+        {
+            class => 'Koha::Holds',
+            value => {
+                borrowernumber => $patron->borrowernumber,
+                biblionumber   => $item->biblionumber,
+                itemnumber     => $item->itemnumber,
+                branchcode     => $library->branchcode,
+                found          => 'W',
+            },
+        }
+    );
+
+    # The README template lists the waiting holds through the existing 'holds' key
+    my ( $payload, $count ) = _payload_for(
+        $plugin, $archive_dir,
+        "messagebee: yes\ncurbside_pickup: " . $curbside_pickup->id . "\nholds: " . $hold->reserve_id . ",\n"
+    );
+    is( $count, 1, 'one payload written to the spool' );
+
+    my $m = $payload->{messages}->[0];
+    is( $m->{patron}->{borrowernumber}, $patron->borrowernumber, 'patron filled in' );
+
+    my $c = $m->{curbside_pickups};
+    is( ref $c, 'ARRAY', 'curbside_pickups is an array' );
+    is( scalar @{$c}, 1, 'one curbside pickup in the payload' );
+    is( $c->[0]->{curbside_pickup}->{id}, $curbside_pickup->id,  'curbside pickup id matches' );
+    is( $c->[0]->{library}->{branchcode}, $library->branchcode, 'library matches' );
+
+    is( scalar @{ $m->{holds} }, 1, 'waiting hold sent alongside the pickup' );
+    is( $m->{holds}->[0]->{hold}->{reserve_id}, $hold->reserve_id, 'hold id matches' );
 
     $schema->storage->txn_rollback;
 };

@@ -47,6 +47,7 @@ Other keys you may use are:
 * `ill_request` - illrequests.illrequest_id, auto-imports patron, library, request attributes, biblio and biblioitem
 * `credit` - accountlines.accountlines_id of a payment or writeoff, auto-imports patron, library and the fees it paid off
 * `recall` - recalls.recall_id, auto-imports patron, pickup library, item, biblio and biblioitem
+* `curbside_pickup` - curbside_pickups.id, auto-imports patron and library
 
 Example notices:
 
@@ -263,4 +264,16 @@ checkout: [% checkout.issue_id %]
 patron: [% borrower.borrowernumber %]
 #Title: [% biblio.title %]
 #Barcode: [% item.barcode %]
+```
+
+NOTE: The holds line lists the patron's holds waiting at the pickup library, the same ones the default notice shows.
+
+NEW_CURBSIDE_PICKUP:
+```
+---
+messagebee: yes
+curbside_pickup: [% curbside_pickup.id %]
+library: [% branch.id %]
+holds: [% FOREACH h IN curbside_pickup.patron.holds %][% IF h.branchcode == curbside_pickup.branchcode && h.found == 'W' %][% h.id %],[% END %][% END %]
+#Pickup time: [% curbside_pickup.scheduled_pickup_datetime %]
 ```
