@@ -43,6 +43,7 @@ Other keys you may use are:
 * `patron` - borrowers.borrowernumber
 * `checkout` - issues.issue_id, auto-imports patron, library, item, biblio and biblioitem
 * `checkouts` - repeating comma delimited issues.issue_id
+* `suggestion` - suggestions.suggestionid, auto-imports patron, library, biblio and biblioitem
 
 Example notices:
 
@@ -205,4 +206,15 @@ WELCOME:
 messagebee: yes
 patron: [% borrower.id %]
 library: [% branch.id %]
+```
+
+NOTE: The same template works for every purchase suggestion status notice, such as REJECTED, ORDERED and AVAILABLE.
+
+ACCEPTED:
+```
+---
+messagebee: yes
+suggestion: [% suggestion.suggestionid %]
+library: [% branch.id %]
+#Title: [% suggestion.title %]
 ```

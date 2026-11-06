@@ -17,6 +17,7 @@ use Koha::Encryption;
 use Koha::File::Transport::SFTP;
 use Koha::File::Transports;
 use Koha::Logger;
+use Koha::Suggestions;
 
 use Data::Dumper;
 use DateTime;
@@ -539,6 +540,29 @@ sub before_send_messages {
                                 $data->{holds} //= [];
                                 push(@{$data->{holds}}, $subdata);
                             }
+                        }
+
+                        ## Handle 'suggestion'
+                        if ($yaml->{suggestion}) {
+                            my $suggestion = Koha::Suggestions->find($yaml->{suggestion});
+                            die "Suggestion with id $yaml->{suggestion} not found\n" unless $suggestion;
+
+                            $patron //= $suggestion->suggester;
+                            $data->{patron} //= $self->scrub_patron($patron->unblessed) if $patron;
+
+                            my $subdata;
+                            $subdata->{suggestion} = $suggestion->unblessed;
+
+                            if (my $library = $suggestion->library) {
+                                $subdata->{library} = $library->unblessed;
+                            }
+
+                            if (my $biblio = Koha::Biblios->find($suggestion->biblionumber)) {
+                                $subdata->{biblio}     = $self->scrub_biblio($biblio->unblessed);
+                                $subdata->{biblioitem} = $biblio->biblioitem->unblessed;
+                            }
+
+                            $data->{suggestions} = [$subdata];
                         }
 
                         ## Handle misc key/value pairs

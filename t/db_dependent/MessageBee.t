@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 19;
+use Test::More tests => 21;
 use Test::MockModule;
 
 use File::Slurp qw( read_file write_file );
@@ -766,6 +766,92 @@ subtest 'payload parity: old_hold notice keeps its (quirky) nested holds structu
     is( $sub->{holds}->[0]->{reserve_id}, $hold->reserve_id, 'old hold reserve_id matches' );
     ok( $sub->{pickup_library},             'pickup_library present' );
     ok( !exists $sub->{biblio}->{abstract}, 'biblio abstract scrubbed out' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'payload parity: suggestion notice (suggestion:) emits a suggestions array entry' => sub {
+    plan tests => 9;
+    $schema->storage->txn_begin;
+
+    my $archive_dir = tempdir( CLEANUP => 1 );
+    my $plugin      = _new_plugin( archive_dir => $archive_dir );
+
+    my $patron     = $builder->build_object( { class => 'Koha::Patrons' } );
+    my $library    = $builder->build_object( { class => 'Koha::Libraries' } );
+    my $biblio     = $builder->build_sample_biblio;
+    my $suggestion = $builder->build_object(
+        {
+            class => 'Koha::Suggestions',
+            value => {
+                suggestedby  => $patron->borrowernumber,
+                biblionumber => $biblio->biblionumber,
+                branchcode   => $library->branchcode,
+            },
+        }
+    );
+
+    my ( $payload, $count ) =
+        _payload_for( $plugin, $archive_dir, "messagebee: yes\nsuggestion: " . $suggestion->suggestionid . "\n" );
+    is( $count, 1, 'one payload written to the spool' );
+
+    my $m = $payload->{messages}->[0];
+    is( $m->{patron}->{borrowernumber}, $patron->borrowernumber, 'patron filled in from the suggester' );
+
+    my $s = $m->{suggestions};
+    is( ref $s, 'ARRAY', 'suggestions is an array' );
+    is( scalar @{$s}, 1, 'one suggestion in the payload' );
+
+    my $sub = $s->[0];
+    is( $sub->{suggestion}->{suggestionid}, $suggestion->suggestionid, 'suggestion id matches' );
+    is( $sub->{library}->{branchcode},      $library->branchcode,      'library matches' );
+    is( $sub->{biblio}->{biblionumber},     $biblio->biblionumber,     'biblio matches' );
+    ok( !exists $sub->{biblio}->{abstract}, 'biblio abstract scrubbed out' );
+    ok( $sub->{biblioitem},                 'biblioitem present' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'notices pointing at a record the plugin cannot use fail with a reason' => sub {
+    plan tests => 3;
+    $schema->storage->txn_begin;
+
+    my $archive_dir = tempdir( CLEANUP => 1 );
+    my $plugin      = _new_plugin( archive_dir => $archive_dir );
+
+    no warnings 'redefine';
+    local *Koha::Plugin::Com::ByWaterSolutions::MessageBee::_upload_pending = sub { };
+    local *Koha::Plugin::Com::ByWaterSolutions::MessageBee::_async_upload   = sub { };
+
+    my $deleted_suggestion    = $builder->build_object( { class => 'Koha::Suggestions' } );
+    my $deleted_suggestion_id = $deleted_suggestion->suggestionid;
+    $deleted_suggestion->delete;
+
+    my $missing_suggestion = $builder->build_object(
+        {
+            class => 'Koha::Notice::Messages',
+            value => {
+                status                 => 'pending',
+                content                => "messagebee: yes\nsuggestion: $deleted_suggestion_id\n",
+                message_transport_type => 'email',
+                letter_code            => 'MBFAIL',
+            },
+        }
+    );
+
+    local $0 = '/some/cgi-script.pl';
+    $plugin->before_send_messages( { type => ['email'], letter_code => ['MBFAIL'] } );
+
+    $missing_suggestion->discard_changes;
+    is( $missing_suggestion->status, 'failed', 'notice for a deleted suggestion is marked failed' );
+    like(
+        $missing_suggestion->failure_code, qr/Suggestion with id $deleted_suggestion_id not found/,
+        'failure code says which suggestion was missing'
+    );
+
+    my @pending = glob("$archive_dir/pending/*.json");
+    my $payload = decode_json( read_file( $pending[0] ) );
+    is( scalar @{ $payload->{messages} }, 0, 'nothing from the failed notices reaches the payload' );
 
     $schema->storage->txn_rollback;
 };

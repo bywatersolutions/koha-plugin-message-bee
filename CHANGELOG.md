@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Purchase suggestion notices (ACCEPTED, REJECTED, ORDERED, AVAILABLE and other suggestion statuses) can now be sent through MessageBee using the new `suggestion` template key.
+
 ## [4.1.4] - 2026-10-15
 
 ### Fixed
