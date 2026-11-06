@@ -45,6 +45,7 @@ Other keys you may use are:
 * `checkouts` - repeating comma delimited issues.issue_id
 * `suggestion` - suggestions.suggestionid, auto-imports patron, library, biblio and biblioitem
 * `ill_request` - illrequests.illrequest_id, auto-imports patron, library, request attributes, biblio and biblioitem
+* `credit` - accountlines.accountlines_id of a payment or writeoff, auto-imports patron, library and the fees it paid off
 
 Example notices:
 
@@ -229,4 +230,14 @@ messagebee: yes
 ill_request: [% illrequest.illrequest_id %]
 library: [% branch.id %]
 #Title: [% ill_bib_title %]
+```
+
+NOTE: The same template works for ACCOUNT_PAYMENT. The "Email receipt" button on a patron's account sends the notice right away. Add `messagebee_immediate: yes` if it should reach MessageBee right away too, instead of on the next process_message_queue.pl run.
+
+ACCOUNT_WRITEOFF:
+```
+---
+messagebee: yes
+credit: [% credit.accountlines_id %]
+library: [% branch.id %]
 ```

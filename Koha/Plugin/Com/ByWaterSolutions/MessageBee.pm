@@ -10,6 +10,7 @@ use base qw(Koha::Plugins::Base);
 use C4::Auth;
 use C4::Context;
 use C4::Log         qw(logaction);
+use Koha::Account::Lines;
 use Koha::CirculationRules;
 use Koha::DateUtils qw(dt_from_string);
 use Koha::Database;
@@ -587,6 +588,43 @@ sub before_send_messages {
                             }
 
                             $data->{ill_requests} = [$subdata];
+                        }
+
+                        ## Handle 'credit'
+                        if ($yaml->{credit}) {
+                            my $credit = Koha::Account::Lines->find($yaml->{credit});
+                            die "Credit with id $yaml->{credit} not found\n" unless $credit;
+                            die "Account line with id $yaml->{credit} is not a credit\n" unless $credit->is_credit;
+
+                            $patron //= $credit->patron;
+                            $data->{patron} //= $self->scrub_patron($patron->unblessed) if $patron;
+
+                            my $subdata;
+                            $subdata->{credit}      = $credit->unblessed;
+                            $subdata->{credit_type} = $credit->credit_type->unblessed;
+                            $subdata->{offsets}     = [];
+
+                            if (my $library = $credit->library) {
+                                $subdata->{library} = $library->unblessed;
+                            }
+
+                            foreach my $offset ($credit->credit_offsets({type => 'APPLY'})->as_list) {
+                                my $debit = $offset->debit;
+
+                                my $offset_data;
+                                $offset_data->{offset}     = $offset->unblessed;
+                                $offset_data->{debit}      = $debit->unblessed;
+                                $offset_data->{debit_type} = $debit->debit_type->unblessed;
+
+                                if (my $item = $debit->item) {
+                                    $offset_data->{item}   = $item->unblessed;
+                                    $offset_data->{biblio} = $self->scrub_biblio($item->biblio->unblessed);
+                                }
+
+                                push(@{$subdata->{offsets}}, $offset_data);
+                            }
+
+                            $data->{credits} = [$subdata];
                         }
 
                         ## Handle misc key/value pairs

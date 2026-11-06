@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 22;
+use Test::More tests => 23;
 use Test::MockModule;
 
 use File::Slurp qw( read_file write_file );
@@ -865,8 +865,94 @@ subtest 'payload parity: ILL request notice (ill_request:) emits an ill_requests
     $schema->storage->txn_rollback;
 };
 
+subtest 'payload parity: account receipt notice (credit:) emits a credits array entry' => sub {
+    plan tests => 12;
+    $schema->storage->txn_begin;
+
+    my $archive_dir = tempdir( CLEANUP => 1 );
+    my $plugin      = _new_plugin( archive_dir => $archive_dir );
+
+    my $patron  = $builder->build_object( { class => 'Koha::Patrons' } );
+    my $library = $builder->build_object( { class => 'Koha::Libraries' } );
+    my $item    = $builder->build_sample_item;
+    my $debit   = $builder->build_object(
+        {
+            class => 'Koha::Account::Lines',
+            value => {
+                borrowernumber    => $patron->borrowernumber,
+                credit_type_code  => undef,
+                debit_type_code   => 'OVERDUE',
+                itemnumber        => $item->itemnumber,
+                amount            => 5,
+                amountoutstanding => 0,
+                issue_id          => undef,
+                old_issue_id      => undef,
+                register_id       => undef,
+                manager_id        => undef,
+            },
+        }
+    );
+    my $credit = $builder->build_object(
+        {
+            class => 'Koha::Account::Lines',
+            value => {
+                borrowernumber    => $patron->borrowernumber,
+                credit_type_code  => 'WRITEOFF',
+                debit_type_code   => undef,
+                itemnumber        => undef,
+                branchcode        => $library->branchcode,
+                amount            => -5,
+                amountoutstanding => 0,
+                issue_id          => undef,
+                old_issue_id      => undef,
+                register_id       => undef,
+                manager_id        => undef,
+            },
+        }
+    );
+
+    # Only APPLY offsets say which fees the credit paid
+    $builder->build_object(
+        {
+            class => 'Koha::Account::Offsets',
+            value => { credit_id => $credit->id, debit_id => undef, type => 'CREATE', amount => -5 },
+        }
+    );
+    $builder->build_object(
+        {
+            class => 'Koha::Account::Offsets',
+            value => { credit_id => $credit->id, debit_id => $debit->id, type => 'APPLY', amount => -5 },
+        }
+    );
+
+    my ( $payload, $count ) =
+        _payload_for( $plugin, $archive_dir, "messagebee: yes\ncredit: " . $credit->accountlines_id . "\n" );
+    is( $count, 1, 'one payload written to the spool' );
+
+    my $m = $payload->{messages}->[0];
+    is( $m->{patron}->{borrowernumber}, $patron->borrowernumber, 'patron filled in from the credit' );
+
+    my $c = $m->{credits};
+    is( ref $c, 'ARRAY', 'credits is an array' );
+    is( scalar @{$c}, 1, 'one credit in the payload' );
+
+    my $sub = $c->[0];
+    is( $sub->{credit}->{accountlines_id}, $credit->accountlines_id, 'credit id matches' );
+    is( $sub->{credit_type}->{code},       'WRITEOFF',               'credit type included' );
+    is( $sub->{library}->{branchcode},     $library->branchcode,     'library matches' );
+    is( scalar @{ $sub->{offsets} }, 1, 'only the APPLY offset is included' );
+
+    my $o = $sub->{offsets}->[0];
+    is( $o->{debit}->{accountlines_id}, $debit->accountlines_id, 'paid debit matches' );
+    is( $o->{debit_type}->{code},       'OVERDUE',               'debit type included' );
+    is( $o->{item}->{itemnumber},       $item->itemnumber,       'item for the debit included' );
+    ok( !exists $o->{biblio}->{abstract}, 'biblio abstract scrubbed out' );
+
+    $schema->storage->txn_rollback;
+};
+
 subtest 'notices pointing at a record the plugin cannot use fail with a reason' => sub {
-    plan tests => 3;
+    plan tests => 5;
     $schema->storage->txn_begin;
 
     my $archive_dir = tempdir( CLEANUP => 1 );
@@ -892,6 +978,24 @@ subtest 'notices pointing at a record the plugin cannot use fail with a reason' 
         }
     );
 
+    my $debit = $builder->build_object(
+        {
+            class => 'Koha::Account::Lines',
+            value => { credit_type_code => undef, debit_type_code => 'OVERDUE' },
+        }
+    );
+    my $debit_as_credit = $builder->build_object(
+        {
+            class => 'Koha::Notice::Messages',
+            value => {
+                status                 => 'pending',
+                content                => "messagebee: yes\ncredit: " . $debit->id . "\n",
+                message_transport_type => 'email',
+                letter_code            => 'MBFAIL',
+            },
+        }
+    );
+
     local $0 = '/some/cgi-script.pl';
     $plugin->before_send_messages( { type => ['email'], letter_code => ['MBFAIL'] } );
 
@@ -901,6 +1005,10 @@ subtest 'notices pointing at a record the plugin cannot use fail with a reason' 
         $missing_suggestion->failure_code, qr/Suggestion with id $deleted_suggestion_id not found/,
         'failure code says which suggestion was missing'
     );
+
+    $debit_as_credit->discard_changes;
+    is( $debit_as_credit->status, 'failed', 'notice pointing at a fee instead of a credit is marked failed' );
+    like( $debit_as_credit->failure_code, qr/is not a credit/, 'failure code says the account line is not a credit' );
 
     my @pending = glob("$archive_dir/pending/*.json");
     my $payload = decode_json( read_file( $pending[0] ) );
