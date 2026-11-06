@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 26;
+use Test::More tests => 27;
 use Test::MockModule;
 
 use File::Slurp qw( read_file write_file );
@@ -1088,6 +1088,50 @@ subtest 'payload parity: article request notice (article_request:) emits an arti
     is( $sub->{article_request}->{id}, $article_request->id, 'article request id matches' );
     is( $sub->{library}->{branchcode}, $library->branchcode, 'library matches' );
     is( $sub->{biblio}->{biblionumber}, $item->biblionumber, 'biblio matches' );
+    ok( !exists $sub->{biblio}->{abstract}, 'biblio abstract scrubbed out' );
+    is( $sub->{item}->{itemnumber}, $item->itemnumber, 'item matches' );
+    ok( $sub->{biblioitem} && $sub->{itemtype}, 'biblioitem and itemtype present' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'payload parity: booking notice (booking:) emits a bookings array entry' => sub {
+    plan tests => 10;
+    $schema->storage->txn_begin;
+
+    my $archive_dir = tempdir( CLEANUP => 1 );
+    my $plugin      = _new_plugin( archive_dir => $archive_dir );
+
+    my $patron  = $builder->build_object( { class => 'Koha::Patrons' } );
+    my $library = $builder->build_object( { class => 'Koha::Libraries' } );
+    my $item    = $builder->build_sample_item;
+    my $booking = $builder->build_object(
+        {
+            class => 'Koha::Bookings',
+            value => {
+                patron_id         => $patron->borrowernumber,
+                biblio_id         => $item->biblionumber,
+                item_id           => $item->itemnumber,
+                pickup_library_id => $library->branchcode,
+            },
+        }
+    );
+
+    my ( $payload, $count ) =
+        _payload_for( $plugin, $archive_dir, "messagebee: yes\nbooking: " . $booking->booking_id . "\n" );
+    is( $count, 1, 'one payload written to the spool' );
+
+    my $m = $payload->{messages}->[0];
+    is( $m->{patron}->{borrowernumber}, $patron->borrowernumber, 'patron filled in from the booking' );
+
+    my $bk = $m->{bookings};
+    is( ref $bk, 'ARRAY', 'bookings is an array' );
+    is( scalar @{$bk}, 1, 'one booking in the payload' );
+
+    my $sub = $bk->[0];
+    is( $sub->{booking}->{booking_id},        $booking->booking_id, 'booking id matches' );
+    is( $sub->{pickup_library}->{branchcode}, $library->branchcode, 'pickup library matches' );
+    is( $sub->{biblio}->{biblionumber},       $item->biblionumber,  'biblio matches' );
     ok( !exists $sub->{biblio}->{abstract}, 'biblio abstract scrubbed out' );
     is( $sub->{item}->{itemnumber}, $item->itemnumber, 'item matches' );
     ok( $sub->{biblioitem} && $sub->{itemtype}, 'biblioitem and itemtype present' );

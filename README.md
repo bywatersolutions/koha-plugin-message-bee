@@ -49,6 +49,7 @@ Other keys you may use are:
 * `recall` - recalls.recall_id, auto-imports patron, pickup library, item, biblio and biblioitem
 * `curbside_pickup` - curbside_pickups.id, auto-imports patron and library
 * `article_request` - article_requests.id, auto-imports patron, library, item, biblio and biblioitem
+* `booking` - bookings.booking_id, auto-imports patron, pickup library, item, biblio and biblioitem
 
 Example notices:
 
@@ -288,4 +289,15 @@ messagebee: yes
 article_request: [% article_request.id %]
 library: [% branch.id %]
 #Title: [% biblio.title %]
+```
+
+NOTE: The same template works for BOOKING_MODIFICATION and BOOKING_CANCELLATION.
+
+BOOKING_CONFIRMATION:
+```
+---
+messagebee: yes
+booking: [% booking.booking_id %]
+library: [% booking.pickup_library_id %]
+#Title: [% booking.biblio.title %]
 ```

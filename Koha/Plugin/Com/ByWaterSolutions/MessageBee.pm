@@ -12,6 +12,7 @@ use C4::Context;
 use C4::Log         qw(logaction);
 use Koha::Account::Lines;
 use Koha::ArticleRequests;
+use Koha::Bookings;
 use Koha::CirculationRules;
 use Koha::CurbsidePickups;
 use Koha::DateUtils qw(dt_from_string);
@@ -697,6 +698,30 @@ sub before_send_messages {
                             }
 
                             $data->{article_requests} = [$subdata];
+                        }
+
+                        ## Handle 'booking'
+                        if ($yaml->{booking}) {
+                            my $booking = Koha::Bookings->find($yaml->{booking});
+                            die "Booking with id $yaml->{booking} not found\n" unless $booking;
+
+                            $patron //= $booking->patron;
+                            $data->{patron} //= $self->scrub_patron($patron->unblessed) if $patron;
+
+                            my $biblio = $booking->biblio;
+
+                            my $subdata;
+                            $subdata->{booking}        = $booking->unblessed;
+                            $subdata->{pickup_library} = $booking->pickup_library->unblessed;
+                            $subdata->{biblio}         = $self->scrub_biblio($biblio->unblessed);
+                            $subdata->{biblioitem}     = $biblio->biblioitem->unblessed;
+
+                            if (my $item = $booking->item) {
+                                $subdata->{item}     = $item->unblessed;
+                                $subdata->{itemtype} = $item->itemtype->unblessed;
+                            }
+
+                            $data->{bookings} = [$subdata];
                         }
 
                         ## Handle misc key/value pairs
