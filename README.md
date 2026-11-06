@@ -48,6 +48,7 @@ Other keys you may use are:
 * `credit` - accountlines.accountlines_id of a payment or writeoff, auto-imports patron, library and the fees it paid off
 * `recall` - recalls.recall_id, auto-imports patron, pickup library, item, biblio and biblioitem
 * `curbside_pickup` - curbside_pickups.id, auto-imports patron and library
+* `article_request` - article_requests.id, auto-imports patron, library, item, biblio and biblioitem
 
 Example notices:
 
@@ -276,4 +277,15 @@ curbside_pickup: [% curbside_pickup.id %]
 library: [% branch.id %]
 holds: [% FOREACH h IN curbside_pickup.patron.holds %][% IF h.branchcode == curbside_pickup.branchcode && h.found == 'W' %][% h.id %],[% END %][% END %]
 #Pickup time: [% curbside_pickup.scheduled_pickup_datetime %]
+```
+
+NOTE: The same template works for AR_REQUESTED, AR_PROCESSING, AR_COMPLETED and AR_CANCELED.
+
+AR_PENDING:
+```
+---
+messagebee: yes
+article_request: [% article_request.id %]
+library: [% branch.id %]
+#Title: [% biblio.title %]
 ```

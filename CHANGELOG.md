@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Payment and writeoff receipts (ACCOUNT_PAYMENT and ACCOUNT_WRITEOFF) can now be sent through MessageBee using the new `credit` template key, along with the fees each one paid off.
 - Recall pickup notices (PICKUP_RECALLED_ITEM) can now be sent through MessageBee using the new `recall` template key.
 - Curbside pickup notices (NEW_CURBSIDE_PICKUP) can now be sent through MessageBee using the new `curbside_pickup` template key.
+- Article request notices (AR_REQUESTED, AR_PENDING, AR_PROCESSING, AR_COMPLETED and AR_CANCELED) can now be sent through MessageBee using the new `article_request` template key.
 
 ## [4.1.4] - 2026-10-15
 

@@ -11,6 +11,7 @@ use C4::Auth;
 use C4::Context;
 use C4::Log         qw(logaction);
 use Koha::Account::Lines;
+use Koha::ArticleRequests;
 use Koha::CirculationRules;
 use Koha::CurbsidePickups;
 use Koha::DateUtils qw(dt_from_string);
@@ -669,6 +670,33 @@ sub before_send_messages {
                             $subdata->{library}         = $curbside_pickup->library->unblessed;
 
                             $data->{curbside_pickups} = [$subdata];
+                        }
+
+                        ## Handle 'article_request'
+                        if ($yaml->{article_request}) {
+                            my $article_request = Koha::ArticleRequests->find($yaml->{article_request});
+                            die "Article request with id $yaml->{article_request} not found\n" unless $article_request;
+
+                            $patron //= $article_request->patron;
+                            $data->{patron} //= $self->scrub_patron($patron->unblessed) if $patron;
+
+                            my $biblio = $article_request->biblio;
+
+                            my $subdata;
+                            $subdata->{article_request} = $article_request->unblessed;
+                            $subdata->{biblio}          = $self->scrub_biblio($biblio->unblessed);
+                            $subdata->{biblioitem}      = $biblio->biblioitem->unblessed;
+
+                            if (my $library = $article_request->branch) {
+                                $subdata->{library} = $library->unblessed;
+                            }
+
+                            if (my $item = $article_request->item) {
+                                $subdata->{item}     = $item->unblessed;
+                                $subdata->{itemtype} = $item->itemtype->unblessed;
+                            }
+
+                            $data->{article_requests} = [$subdata];
                         }
 
                         ## Handle misc key/value pairs

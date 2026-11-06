@@ -17,7 +17,7 @@
 
 use Modern::Perl;
 
-use Test::More tests => 25;
+use Test::More tests => 26;
 use Test::MockModule;
 
 use File::Slurp qw( read_file write_file );
@@ -1046,6 +1046,51 @@ subtest 'payload parity: curbside pickup notice (curbside_pickup:) emits a curbs
 
     is( scalar @{ $m->{holds} }, 1, 'waiting hold sent alongside the pickup' );
     is( $m->{holds}->[0]->{hold}->{reserve_id}, $hold->reserve_id, 'hold id matches' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'payload parity: article request notice (article_request:) emits an article_requests array entry' => sub {
+    plan tests => 10;
+    $schema->storage->txn_begin;
+
+    my $archive_dir = tempdir( CLEANUP => 1 );
+    my $plugin      = _new_plugin( archive_dir => $archive_dir );
+
+    my $patron          = $builder->build_object( { class => 'Koha::Patrons' } );
+    my $library         = $builder->build_object( { class => 'Koha::Libraries' } );
+    my $item            = $builder->build_sample_item;
+    my $article_request = $builder->build_object(
+        {
+            class => 'Koha::ArticleRequests',
+            value => {
+                borrowernumber => $patron->borrowernumber,
+                biblionumber   => $item->biblionumber,
+                itemnumber     => $item->itemnumber,
+                branchcode     => $library->branchcode,
+                debit_id       => undef,
+            },
+        }
+    );
+
+    my ( $payload, $count ) =
+        _payload_for( $plugin, $archive_dir, "messagebee: yes\narticle_request: " . $article_request->id . "\n" );
+    is( $count, 1, 'one payload written to the spool' );
+
+    my $m = $payload->{messages}->[0];
+    is( $m->{patron}->{borrowernumber}, $patron->borrowernumber, 'patron filled in from the article request' );
+
+    my $ar = $m->{article_requests};
+    is( ref $ar, 'ARRAY', 'article_requests is an array' );
+    is( scalar @{$ar}, 1, 'one article request in the payload' );
+
+    my $sub = $ar->[0];
+    is( $sub->{article_request}->{id}, $article_request->id, 'article request id matches' );
+    is( $sub->{library}->{branchcode}, $library->branchcode, 'library matches' );
+    is( $sub->{biblio}->{biblionumber}, $item->biblionumber, 'biblio matches' );
+    ok( !exists $sub->{biblio}->{abstract}, 'biblio abstract scrubbed out' );
+    is( $sub->{item}->{itemnumber}, $item->itemnumber, 'item matches' );
+    ok( $sub->{biblioitem} && $sub->{itemtype}, 'biblioitem and itemtype present' );
 
     $schema->storage->txn_rollback;
 };
