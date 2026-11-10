@@ -53,7 +53,7 @@ CHECKOUT:
 messagebee: yes
 checkout: [% checkout.id %]
 library: [% branch.id %]
-#Title: [% checkout.biblio.title %] [% checkout.biblio.subtitle %]
+#Title: [% checkout.item.biblio.title %] [% checkout.item.biblio.subtitle %]
 #Barcode: [% checkout.item.barcode %]
 ----
 ```
@@ -65,7 +65,7 @@ RENEWAL:
 messagebee: yes
 checkout: [% checkout.id %]
 library: [% branch.id %]
-#Title: [% checkout.biblio.title %] [% checkout.biblio.subtitle %]
+#Title: [% checkout.item.biblio.title %] [% checkout.item.biblio.subtitle %]
 #Barcode: [% checkout.item.barcode %]
 ----
 ```
@@ -78,7 +78,7 @@ messagebee: yes
 old_checkout: [% old_checkout.issue_id %]
 patron: [% borrower.borrowernumber %]
 library: [% branch.id %]
-#Title: [% old_checkout.biblio.title %] [% old_checkout.biblio.subtitle %]
+#Title: [% old_checkout.item.biblio.title %] [% old_checkout.item.biblio.subtitle %]
 #Barcode: [% old_checkout.item.barcode %]
 ----
 ```
@@ -140,7 +140,7 @@ PREDUE:
 messagebee: yes
 patron: [% borrower.id %]
 checkout: [% checkout.issue_id %]
-#Title: [% checkout.biblio.title %] [% checkout.biblio.subtitle %]
+#Title: [% checkout.item.biblio.title %] [% checkout.item.biblio.subtitle %]
 #Barcode: [% checkout.item.barcode %]
 ```
 
@@ -157,7 +157,7 @@ DUE:
 ---
 messagebee: yes
 checkout: [% checkout.issue_id %]
-#Title: [% checkout.biblio.title %] [% checkout.biblio.subtitle %]
+#Title: [% checkout.item.biblio.title %] [% checkout.item.biblio.subtitle %]
 #Barcode: [% checkout.item.barcode %]
 ```
 
@@ -173,7 +173,7 @@ AUTO_RENEWALS:
 ---
 messagebee: yes
 checkout: [% checkout.id %]
-#Title: [% checkout.biblio.title %] [% checkout.biblio.subtitle %]
+#Title: [% checkout.item.biblio.title %] [% checkout.item.biblio.subtitle %]
 #Barcode: [% checkout.item.barcode %]
 ```
 
