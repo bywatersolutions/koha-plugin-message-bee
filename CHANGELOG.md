@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-11-16
+
 ### Added
 - Purchase suggestion notices (ACCEPTED, REJECTED, ORDERED, AVAILABLE and other suggestion statuses) can now be sent through MessageBee using the new `suggestion` template key.
 - Interlibrary loan notices to patrons (ILL_PICKUP_READY, ILL_REQUEST_UNAVAIL and ILL_REQUEST_UPDATE) can now be sent through MessageBee using the new `ill_request` template key.
@@ -32,5 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial commit!
 
-[Unreleased]: https://github.com/bywatersolutions/koha-plugin-message-bee/compare/v4.1.4...HEAD
+[Unreleased]: https://github.com/bywatersolutions/koha-plugin-message-bee/compare/v4.2.0...HEAD
+[4.2.0]: https://github.com/bywatersolutions/koha-plugin-message-bee/compare/v4.1.4...v4.2.0
 [4.1.4]: https://github.com/bywatersolutions/koha-plugin-message-bee/compare/v4.1.3...v4.1.4
